@@ -1,4 +1,5 @@
 "use client";
+import Link from 'next/link';
 
 import React from 'react';
 import { Search, MapPin, BarChart2 } from 'lucide-react';
@@ -27,9 +28,18 @@ export default function HomePage() {
           <a href="#" className="hover:text-blue-600 transition">My Profile</a>
         </div>
         
-        <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">
-          Log In / Sign Up
-        </button>
+        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
+        <Link href="/signup">
+          <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">
+            Sign Up 
+          </button>
+        </Link>
+        <Link href="/login">
+          <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">
+            Log In
+          </button>
+        </Link>
+        </div>
       </nav>
 
       {/* --- HERO SECTION --- */}
