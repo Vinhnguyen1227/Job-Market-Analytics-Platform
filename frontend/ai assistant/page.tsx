@@ -75,7 +75,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
   const handleSend = async () => {
     const text = inputValue.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
     const newMessages = [...messages, userMsg];
@@ -83,7 +83,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     setInputValue('');
     setIsTyping(true);
 
-    // Create or update chat
+    // Create new chat entry in sidebar if none active
     let currentChatId = activeChatId;
     if (!currentChatId) {
       const newChat: Chat = {
@@ -96,25 +96,70 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       currentChatId = newChat.id;
     }
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponses: Record<string, string> = {
-        default: `Tôi hiểu bạn đang hỏi về "${text}". Đây là một chủ đề thú vị trong thị trường việc làm hiện nay. Hãy để tôi phân tích và đưa ra những thông tin hữu ích nhất cho bạn dựa trên dữ liệu thị trường mới nhất từ CareerIntel.`,
-      };
+    // Prepare a streaming AI message placeholder
+    const aiMsgId = (Date.now() + 1).toString();
+    const aiMsgPlaceholder: Message = { id: aiMsgId, role: 'assistant', content: '' };
+    setMessages(prev => [...prev, aiMsgPlaceholder]);
+    setIsTyping(false);
 
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: aiResponses.default,
-      };
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
 
-      const updatedMessages = [...newMessages, aiMsg];
-      setMessages(updatedMessages);
-      setChats(prev => prev.map(c =>
-        c.id === currentChatId ? { ...c, messages: updatedMessages } : c
-      ));
-      setIsTyping(false);
-    }, 1500);
+      if (!res.ok || !res.body) throw new Error('Failed to connect to AI');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      // If it's a JSON error response, read it fully and display
+      const contentType = res.headers.get('content-type') ?? '';
+      if (!res.ok || contentType.includes('application/json')) {
+        const errorData = await res.json();
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === aiMsgId
+              ? { ...m, content: `⚠️ Error: ${errorData.error ?? 'Unknown error'}` }
+              : m
+          )
+        );
+        return;
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+
+        // Update the streaming AI message in place
+        setMessages(prev =>
+          prev.map(m => m.id === aiMsgId ? { ...m, content: fullText } : m)
+        );
+      }
+
+      // Persist final messages to chat history
+      setMessages(prev => {
+        const finalMessages = prev;
+        setChats(cs => cs.map(c =>
+          c.id === currentChatId ? { ...c, messages: finalMessages } : c
+        ));
+        return finalMessages;
+      });
+    } catch (err) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === aiMsgId
+            ? { ...m, content: '⚠️ Sorry, something went wrong. Please try again.' }
+            : m
+        )
+      );
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
