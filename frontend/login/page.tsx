@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(login, initialState);
 
   return (
-    <div className="min-h-screen font-sans bg-gray-50 flex flex-col relative overflow-hidden">
+    <div className="min-h-screen font-sans bg-[#f4f2ee] flex flex-col relative overflow-hidden">
       
       {/* --- HEADER --- */}
       <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
