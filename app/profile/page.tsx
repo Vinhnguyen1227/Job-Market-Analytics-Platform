@@ -1,9 +1,9 @@
-import HomePage from '@/frontend/home/page';
+import MyProfilePage from '@/frontend/my profile/page';
 import { createClient } from '@/backend/supabase/server';
 
-export default async function Home() {
+export default async function Profile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <HomePage user={user} />;
+  return <MyProfilePage user={user} />;
 }

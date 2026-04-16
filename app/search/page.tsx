@@ -1,9 +1,9 @@
-import HomePage from '@/frontend/home/page';
+import JobSearchPage from '@/frontend/job search/page';
 import { createClient } from '@/backend/supabase/server';
 
-export default async function Home() {
+export default async function JobSearch() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <HomePage user={user} />;
+  return <JobSearchPage user={user} />;
 }

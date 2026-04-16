@@ -1,9 +1,9 @@
-import HomePage from '@/frontend/home/page';
+import AIAssistantPage from '@/frontend/ai assistant/page';
 import { createClient } from '@/backend/supabase/server';
 
-export default async function Home() {
+export default async function AIPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <HomePage user={user} />;
+  return <AIAssistantPage user={user} />;
 }
