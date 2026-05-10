@@ -63,3 +63,75 @@ export async function logout() {
   revalidatePath('/', 'layout')
   redirect('/login')
 }
+
+export async function updateProfile(firstName: string, lastName: string, country: string, city: string) {
+  const supabase = await createClient()
+  
+  const fullName = `${firstName} ${lastName}`.trim()
+
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      full_name: fullName,
+      country,
+      city
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function updateExperiences(experiences: any[]) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      experiences
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function updateEducations(educations: any[]) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      educations
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function updateSkills(skills: any[]) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      skills
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
