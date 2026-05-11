@@ -11,10 +11,11 @@
     "upload:cv-templates": "ts-node --project tsconfig.scripts.json --transpile-only backend/scrap/upload_cv_templates.ts",
     "jobs:worker": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/queue.ts",
     "jobs:cron": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/cron.ts",
-    "jobs:github": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/github_action.ts"
+    "jobs:github": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/github_action.ts",
+    "es:sync": "ts-node --project tsconfig.scripts.json --transpile-only backend/elasticsearch/sync.ts"
   },
   "dependencies": {
-    "@elastic/elasticsearch": "^9.3.4",
+    "@elastic/elasticsearch": "^8.19.1",
     "@playwright/test": "^1.59.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
