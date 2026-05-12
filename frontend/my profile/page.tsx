@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Camera, 
@@ -33,6 +33,70 @@ export default function MyProfile({ user }: { user?: any }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // CV Upload state
+  const [cvFile, setCvFile] = useState<{ file_name: string; file_size: number; file_type: string; uploaded_at: string; signed_url: string } | null>(
+    user?.user_metadata?.cv ?? null
+  );
+  const [isUploadingCv, setIsUploadingCv] = useState(false);
+  const [isDraggingCv, setIsDraggingCv] = useState(false);
+  const [cvError, setCvError] = useState<string | null>(null);
+  const [isDeletingCv, setIsDeletingCv] = useState(false);
+  const cvInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadCv = useCallback(async (file: File) => {
+    setCvError(null);
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type)) {
+      setCvError('Chỉ chấp nhận file PDF, DOC, DOCX');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setCvError('File vượt quá 5MB');
+      return;
+    }
+    setIsUploadingCv(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/v1/cv/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { setCvError(data.error || 'Upload thất bại'); return; }
+      setCvFile({ file_name: data.fileName, file_size: data.fileSize, file_type: data.fileType, uploaded_at: new Date().toISOString(), signed_url: data.signedUrl });
+    } catch {
+      setCvError('Lỗi kết nối, vui lòng thử lại');
+    } finally {
+      setIsUploadingCv(false);
+    }
+  }, []);
+
+  const handleCvInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadCv(file);
+    e.target.value = '';
+  };
+
+  const handleCvDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingCv(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadCv(file);
+  };
+
+  const handleDeleteCv = async () => {
+    setIsDeletingCv(true);
+    try {
+      const res = await fetch('/api/v1/cv/upload', { method: 'DELETE' });
+      if (res.ok) setCvFile(null);
+    } finally {
+      setIsDeletingCv(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
   
   const fullName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
   const initialFirstName = fullName.split(' ')[0] || '';
@@ -372,14 +436,119 @@ export default function MyProfile({ user }: { user?: any }) {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
               <h2 className="text-[20px] font-semibold mb-2">Tải lên CV của bạn</h2>
               <p className="text-[14px] text-gray-800 mb-6">Tải lên CV mới nhất của bạn để dễ dàng ứng tuyển và thu hút sự chú ý từ nhà tuyển dụng.</p>
-              
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center text-center bg-gray-50 hover:bg-[#f0f6ff] hover:border-[#0a66c2] transition-colors cursor-pointer group">
-                <div className="w-14 h-14 bg-white border border-gray-200 shadow-sm text-gray-500 group-hover:text-[#0a66c2] group-hover:border-[#0a66c2] rounded-full flex items-center justify-center mb-4 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+
+              {/* Hidden file input */}
+              <input
+                ref={cvInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={handleCvInputChange}
+              />
+
+              {cvFile ? (
+                /* Đã có CV — hiển thị thẻ file */
+                <div className="border border-gray-200 rounded-lg p-5 flex items-center gap-4 bg-[#f8faff]">
+                  {/* Icon theo loại file */}
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: cvFile.file_type === 'application/pdf' ? '#fff1f0' : '#f0f7ff' }}>
+                    {cvFile.file_type === 'application/pdf' ? (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="#ff4d4f" opacity=".15"/>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#ff4d4f" strokeWidth="1.5" fill="none"/>
+                        <polyline points="14 2 14 8 20 8" stroke="#ff4d4f" strokeWidth="1.5" fill="none"/>
+                        <text x="6" y="17" fontSize="6" fontWeight="700" fill="#ff4d4f">PDF</text>
+                      </svg>
+                    ) : (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="#1890ff" opacity=".15"/>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#1890ff" strokeWidth="1.5" fill="none"/>
+                        <polyline points="14 2 14 8 20 8" stroke="#1890ff" strokeWidth="1.5" fill="none"/>
+                        <text x="5" y="17" fontSize="5.5" fontWeight="700" fill="#1890ff">DOC</text>
+                      </svg>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-slate-800 truncate">{cvFile.file_name}</p>
+                    <p className="text-[12px] text-gray-400 mt-0.5">
+                      {formatFileSize(cvFile.file_size)} · Cập nhật {new Date(cvFile.uploaded_at).toLocaleDateString('vi-VN')}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={cvFile.signed_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-[13px] font-medium text-[#0a66c2] bg-[#e8f0fe] hover:bg-[#d2e3fc] px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      Xem
+                    </a>
+                    <button
+                      onClick={() => cvInputRef.current?.click()}
+                      className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                      Thay thế
+                    </button>
+                    <button
+                      onClick={handleDeleteCv}
+                      disabled={isDeletingCv}
+                      className="flex items-center gap-1.5 text-[13px] font-medium text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      {isDeletingCv ? 'Đang xoá...' : 'Xoá'}
+                    </button>
+                  </div>
                 </div>
-                <h3 className="text-[16px] font-semibold text-slate-800 group-hover:text-[#0a66c2] transition-colors">Nhấn để tải lên hoặc kéo thả</h3>
-                <p className="text-[14px] text-gray-500 mt-1">PDF, DOC, DOCX (Tối đa 5MB)</p>
-              </div>
+              ) : (
+                /* Chưa có CV — khu vực kéo thả */
+                <div
+                  onClick={() => !isUploadingCv && cvInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setIsDraggingCv(true); }}
+                  onDragLeave={() => setIsDraggingCv(false)}
+                  onDrop={handleCvDrop}
+                  className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center transition-colors ${
+                    isDraggingCv
+                      ? 'border-[#0a66c2] bg-[#e8f0fe] cursor-copy'
+                      : isUploadingCv
+                      ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                      : 'border-gray-300 bg-gray-50 hover:bg-[#f0f6ff] hover:border-[#0a66c2] cursor-pointer'
+                  } group`}
+                >
+                  {isUploadingCv ? (
+                    <>
+                      <div className="w-14 h-14 bg-white border border-gray-200 shadow-sm rounded-full flex items-center justify-center mb-4">
+                        <svg className="animate-spin" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0a66c2" strokeWidth="2">
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round"/>
+                        </svg>
+                      </div>
+                      <h3 className="text-[16px] font-semibold text-[#0a66c2]">Đang tải lên...</h3>
+                      <p className="text-[14px] text-gray-500 mt-1">Vui lòng chờ</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-14 h-14 bg-white border border-gray-200 shadow-sm text-gray-500 group-hover:text-[#0a66c2] group-hover:border-[#0a66c2] rounded-full flex items-center justify-center mb-4 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                      </div>
+                      <h3 className="text-[16px] font-semibold text-slate-800 group-hover:text-[#0a66c2] transition-colors">
+                        {isDraggingCv ? 'Thả file vào đây' : 'Nhấn để tải lên hoặc kéo thả'}
+                      </h3>
+                      <p className="text-[14px] text-gray-500 mt-1">PDF, DOC, DOCX (Tối đa 5MB)</p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Thông báo lỗi */}
+              {cvError && (
+                <div className="mt-3 flex items-center gap-2 text-[13px] text-red-500 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {cvError}
+                </div>
+              )}
             </div>
 
             {/* Experience Box */}
