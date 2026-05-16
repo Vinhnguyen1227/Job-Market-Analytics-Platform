@@ -12,7 +12,8 @@
     "jobs:worker": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/queue.ts",
     "jobs:cron": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/cron.ts",
     "jobs:github": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/github_action.ts",
-    "es:sync": "ts-node --project tsconfig.scripts.json --transpile-only backend/elasticsearch/sync.ts"
+    "es:sync": "ts-node --project tsconfig.scripts.json --transpile-only backend/elasticsearch/sync.ts",
+    "migrate:tags": "ts-node --project tsconfig.scripts.json --transpile-only backend/lib/migrate_normalize_tags.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.1",
