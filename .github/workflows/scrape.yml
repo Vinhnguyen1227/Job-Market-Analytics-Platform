@@ -24,10 +24,41 @@ jobs:
       - name: Cài đặt thư viện (npm install)
         run: npm ci
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # cache pip dependencies
+
+      - name: Cache Huggingface Models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-huggingface-bge-m3
+          restore-keys: |
+            ${{ runner.os }}-huggingface-
+
+      - name: Install Python Dependencies
+        run: |
+          cd python-ml-service
+          pip install -r requirements.txt
+
+      - name: Start ML Server
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd python-ml-service
+          python main.py &
+          # Wait for server to be ready
+          sleep 10
+          curl --retry 5 --retry-connrefused http://127.0.0.1:8000/health
+
       - name: Cài đặt Playwright Browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Chạy Script Cào Dữ Liệu và Làm Sạch
+      - name: Chạy Script Cào Dữ Liệu và Làm Sạch (Node.js)
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

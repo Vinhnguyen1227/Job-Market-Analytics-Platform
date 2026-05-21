@@ -1,6 +1,5 @@
 import { chromium, type Browser, type Page } from 'playwright';
 import * as fs from 'fs';
-import { normalizeJobTags } from '../lib/normalizeJobTags';
 
 // Delay giữa mỗi lần cào chi tiết job
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -456,11 +455,7 @@ export async function scrapeJoboko() {
           muc_luong: pickCleanValue([detailData.muc_luong, listJob.muc_luong], looksLikeSalary),
           logo: toAbsoluteUrlNode(detailData.logo) || listJob.logo,
           hinh_thuc_lam_viec: pickCleanValue([detailData.hinh_thuc_lam_viec], looksLikeWorkType),
-          nganh_nghe: normalizeJobTags(
-            pickCleanValue([detailData.nganh_nghe]) !== 'N/A'
-              ? pickCleanValue([detailData.nganh_nghe])
-              : extractTagFromUrl(listJob.url)
-          ),
+          nganh_nghe: extractTagFromUrl(listJob.url),
           cap_bac: pickCleanValue([detailData.cap_bac], looksLikeLevel),
           kinh_nghiem_lam_viec: normalizeExperience(detailData.kinh_nghiem_lam_viec) ?? 'N/A',
           thong_tin_tuyen_dung: {
