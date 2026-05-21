@@ -187,9 +187,9 @@ const getSalaryBuckets = (raw?: string): SalaryRangeLabel[] => {
 // ─── Experience Parser ────────────────────────────────────────────────────────
 
 const EXP_RANGES = [
-  { label: 'Dưới 1 năm', min: 0, max: 1        },
-  { label: '1 – 2 năm',  min: 1, max: 2        },
-  { label: '2 – 5 năm',  min: 2, max: 5        },  // bao gồm đúng 5 năm
+  { label: 'Dưới 1 năm', min: 0, max: 1 },
+  { label: '1 – 2 năm', min: 1, max: 2 },
+  { label: '2 – 5 năm', min: 2, max: 5 },  // bao gồm đúng 5 năm
   { label: 'Trên 5 năm', min: 5, max: Infinity },  // strictly > 5
 ] as const;
 
@@ -291,10 +291,12 @@ interface DropdownFilterProps {
   selected: string[];
   onToggle: (v: string) => void;
   onClear: () => void;
+  searchable?: boolean;
 }
 
-const DropdownFilter = ({ label, options, selected, onToggle, onClear }: DropdownFilterProps) => {
+const DropdownFilter = ({ label, options, selected, onToggle, onClear, searchable }: DropdownFilterProps) => {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ref = React.useRef<HTMLDivElement>(null);
 
   // Đóng dropdown khi click ra ngoài
@@ -306,16 +308,24 @@ const DropdownFilter = ({ label, options, selected, onToggle, onClear }: Dropdow
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
+
   if (options.length === 0) return null;
   const activeCount = selected.length;
+
+  const filteredOptions = searchable && query.trim()
+    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className={`inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-md border transition-all duration-150 whitespace-nowrap cursor-pointer select-none ${activeCount > 0
-            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-            : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+          : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
           }`}
       >
         {label}
@@ -341,29 +351,47 @@ const DropdownFilter = ({ label, options, selected, onToggle, onClear }: Dropdow
               </button>
             )}
           </div>
+
+          {/* Search Input */}
+          {searchable && (
+            <div className="p-2 border-b border-gray-100">
+              <input
+                type="text"
+                placeholder="Tìm kiếm..."
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded outline-none focus:border-blue-400 placeholder-gray-400 text-slate-700"
+              />
+            </div>
+          )}
+
           {/* Options list */}
           <div className="max-h-56 overflow-y-auto py-1">
-            {options.map((opt) => {
-              const isActive = selected.includes(opt);
-              return (
-                <button
-                  key={opt}
-                  onClick={(e) => { e.stopPropagation(); onToggle(opt); }}
-                  className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 transition-colors ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <span className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isActive ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
-                    }`}>
-                    {isActive && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                        <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className="truncate">{opt}</span>
-                </button>
-              );
-            })}
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-gray-400 text-center">Không tìm thấy lựa chọn</div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isActive = selected.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    onClick={(e) => { e.stopPropagation(); onToggle(opt); }}
+                    className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 transition-colors ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    <span className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isActive ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                      }`}>
+                      {isActive && (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="truncate">{opt}</span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -373,29 +401,82 @@ const DropdownFilter = ({ label, options, selected, onToggle, onClear }: Dropdow
 
 // ─── Main Export ───────────────────────────────────────────────────────────────
 
-export default function JobSearchPage({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
+export default function JobSearchPage({ user }: { user?: any }) {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#f4f2ee] flex items-center justify-center">Đang tải...</div>}>
-      <JobSearchContent user={user} jobs={jobs} />
+      <JobSearchContent user={user} />
     </Suspense>
   );
 }
 
-function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
+function JobSearchContent({ user }: { user?: any }) {
   const searchParams = useSearchParams();
+
+  // ── API state ──
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [locationOptions, setLocationOptions] = useState<string[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
 
   const [filters, setFilters] = useState<FilterState>({
     ...EMPTY_FILTERS,
     keyword: searchParams?.get('keyword') || '',
-    locations: searchParams?.get('location') ? [searchParams.get('location')!] : [],
-    categories: searchParams?.get('category') ? [searchParams.get('category')!] : [],
+    locations: searchParams?.getAll('location')?.length ? searchParams.getAll('location') : [],
+    categories: searchParams?.getAll('category')?.length ? searchParams.getAll('category') : [],
   });
 
-  const update = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  const [currentPage, setCurrentPage] = useState(1);
+  const jobsPerPage = 20;
 
-  const toggleFilter = <K extends keyof FilterState>(key: K, item: string) =>
+  // ─── Fetch filter options once on mount ──────────────────────────────────
+  React.useEffect(() => {
+    fetch('/api/v1/jobs/options')
+      .then(r => r.json())
+      .then(d => {
+        if (d.locations) setLocationOptions(d.locations);
+        if (d.categories) setCategoryOptions(d.categories);
+      });
+  }, []);
+
+  // ─── Fetch jobs from API on filter/page change ───────────────────────────
+  const fetchJobs = React.useCallback(() => {
+    setIsLoading(true);
+    const params = new URLSearchParams();
+    if (filters.keyword) params.set('keyword', filters.keyword);
+    filters.locations.forEach(l => params.append('locations', l));
+    filters.categories.forEach(c => params.append('categories', c));
+    filters.workTypes.forEach(w => params.append('workTypes', w));
+    filters.levels.forEach(l => params.append('levels', l));
+    filters.experiences.forEach(e => params.append('experiences', e));
+    filters.salaryBuckets.forEach(s => params.append('salaryBuckets', s));
+    params.set('page', String(currentPage));
+
+    fetch(`/api/v1/jobs/search?${params.toString()}`)
+      .then(r => r.json())
+      .then(d => {
+        setJobs(d.jobs || []);
+        setTotal(d.total || 0);
+        setTotalPages(d.totalPages || 1);
+        setIsLoading(false);
+      })
+      .catch(() => setIsLoading(false));
+  }, [filters, currentPage]);
+
+  React.useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
+  const update = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+
+  const toggleFilter = <K extends keyof FilterState>(key: K, item: string) => {
     setFilters((prev) => ({ ...prev, [key]: toggleItem(prev[key] as string[], item) as FilterState[K] }));
+    setCurrentPage(1);
+  };
 
   const hasActiveFilters =
     filters.keyword ||
@@ -406,160 +487,25 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
     filters.experiences.length ||
     filters.salaryBuckets.length;
 
-  // ─── Deduplicated job list ─────────────────────────────────────────────────
+  // ─── Static option lists ──────────────────────────────────────────────────
+  const WORK_TYPE_ALL = ['Toàn thời gian', 'Bán thời gian', 'Thực tập', 'Thời vụ', 'Làm tại nhà'];
+  const workTypeOptions = WORK_TYPE_ALL;
+  const experienceOptions: ExpRangeLabel[] = EXP_RANGES.map(r => r.label) as ExpRangeLabel[];
+  const salaryBucketOptions: SalaryRangeLabel[] = SALARY_RANGES.map(r => r.label) as SalaryRangeLabel[];
+  const levelOptions: string[] = ['Thực tập sinh', 'Sinh viên', 'Nhân viên', 'Trưởng nhóm', 'Giám sát', 'Quản lý', 'Giám đốc'];
 
-  const displayJobs = useMemo(() => {
-    const seen = new Set<string>();
-    return jobs.filter((job, idx) => {
-      const title = (job.tieu_de || job.title || '').trim().toLowerCase();
-      const company = (job.cong_ty || job.company || '').trim().toLowerCase();
-      const url = (job.url || '').trim().toLowerCase();
-      const key = url || `${title}-${company}-${job.dia_diem || job.location || ''}-${idx}`;
-      if (!isValidInfo(key)) return true;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [jobs]);
-
-  // ─── Option lists derived from data ───────────────────────────────────────
-
-  const locationOptions = useMemo(() => {
-    const set = new Set<string>();
-    displayJobs.forEach((j) => {
-      splitLocations(j.dia_diem || j.location || '').forEach((city) => {
-        if (isValidInfo(city)) set.add(city);
-      });
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
-  }, [displayJobs]);
-
-  const categoryOptions = useMemo(() => {
-    const set = new Set<string>();
-    displayJobs.forEach((j) => {
-      (j.nganh_nghe || '').split(',').forEach((c: string) => { const t = c.trim(); if (t) set.add(t); });
-    });
-    return Array.from(set);
-  }, [displayJobs]);
-
-  // Chuẩn hóa hình thức làm việc: gộp biến thể và tách ghép nếu có nhiều loại trong cùng 1 chuỗi
-  const getWorkTypeTags = (raw?: string): string[] => {
-    if (!raw || !isValidInfo(raw)) return [];
-    const tags: string[] = [];
-    const text = raw.trim();
-
-    // Toàn thời gian
-    if (/toàn thời gian|full[.\-\s]?time|toàn phần/i.test(text)) tags.push('Toàn thời gian');
-    // Bán thời gian
-    if (/bán thời gian|part[.\-\s]?time/i.test(text)) tags.push('Bán thời gian');
-    // Thực tập
-    if (/thực tập|intern(?:ship)?/i.test(text)) tags.push('Thực tập');
-    // Thời vụ / Hợp đồng ngắn hạn / Freelance
-    if (/thời vụ|hợp đồng ngắn hạn|freelance|tạm thời|contract/i.test(text)) tags.push('Thời vụ');
-    // Làm tại nhà / Remote
-    if (/làm tại nhà|làm ở nhà|remote|hybrid|work from home|wfh/i.test(text)) tags.push('Làm tại nhà');
-
-    // Nếu không match được gì, giữ nguyên giá trị gốc
-    if (tags.length === 0) return [text];
-    return tags;
-  };
-
-  // Danh sách hình thức cố định — luôn hiển thị đủ 5 loại cho user chọn dù data có hay không
-  const WORK_TYPE_ALL = ['Toàn thời gian', 'Bán thời gian', 'Thực tập', 'Thời vụ', 'Làm tại nhà'] as const;
-
-  const workTypeOptions = useMemo(() => {
-    // Luôn bắt đầu từ danh sách chuẩn
-    const result: string[] = [...WORK_TYPE_ALL];
-    // Bổ sung các giá trị thô từ data nếu không nằm trong danh sách chuẩn
-    displayJobs.forEach((j) => {
-      getWorkTypeTags(j.hinh_thuc_lam_viec).forEach((t) => {
-        if (!result.includes(t)) result.push(t);
-      });
-    });
-    return result;
-  }, [displayJobs]);
-
+  // ─── Helpers used in card render ─────────────────────────────────────────
   const getLevels = (raw: string): string[] => {
     const text = raw.trim();
     if (!isValidInfo(text)) return [];
-    // Bỏ qua tag Kỹ thuật viên / Kỹ sư
     if (/kỹ thuật viên\s*\/\s*kỹ sư/i.test(text)) return [];
-    
-    let levels: string[] = [];
-
-    // Tách Thực tập sinh/Sinh viên
-    if (/thực tập sinh\s*\/\s*sinh viên|sinh viên\s*\/\s*thực tập sinh/i.test(text)) {
-      levels.push('Thực tập sinh', 'Sinh viên');
-    }
-    // Tách Trưởng nhóm / Giám sát
-    else if (/trưởng nhóm\s*\/\s*giám sát|giám sát\s*\/\s*trưởng nhóm/i.test(text)) {
-      levels.push('Trưởng nhóm', 'Giám sát');
-    } else {
-      // Gộp các biến thể Quản lý
-      if (/quản lý/i.test(text)) {
-        levels.push('Quản lý');
-      } else {
-        levels.push(text);
-      }
-    }
-    return levels;
+    if (/thực tập sinh\s*\/\s*sinh viên|sinh viên\s*\/\s*thực tập sinh/i.test(text)) return ['Thực tập sinh', 'Sinh viên'];
+    if (/trưởng nhóm\s*\/\s*giám sát|giám sát\s*\/\s*trưởng nhóm/i.test(text)) return ['Trưởng nhóm', 'Giám sát'];
+    if (/quản lý/i.test(text)) return ['Quản lý'];
+    return [text];
   };
 
-  const levelOptions = useMemo(() => {
-    const available = new Set<string>();
-    displayJobs.forEach((j) => {
-      getLevels(j.cap_bac || '').forEach((lvl) => {
-        if (isValidInfo(lvl)) available.add(lvl);
-      });
-    });
-    return Array.from(available);
-  }, [displayJobs]);
-
-  // Chỉ hiển thị các bucket kinh nghiệm thực sự có job (giữ đúng thứ tự bucket)
-  const experienceOptions = useMemo((): ExpRangeLabel[] => {
-    const available = new Set<ExpRangeLabel>();
-    displayJobs.forEach((j) => {
-      getExpBuckets(j.kinh_nghiem_lam_viec).forEach((b) => available.add(b));
-    });
-    return EXP_RANGES.map((r) => r.label).filter((l) => available.has(l as ExpRangeLabel)) as ExpRangeLabel[];
-  }, [displayJobs]);
-
-  // Chỉ hiển thị các bucket lương thực sự có job
-  const salaryBucketOptions = useMemo((): SalaryRangeLabel[] => {
-    const available = new Set<SalaryRangeLabel>();
-    displayJobs.forEach((j) => {
-      getSalaryBuckets(j.muc_luong || j.salary).forEach((b) => available.add(b));
-    });
-    return SALARY_RANGES.map((r) => r.label).filter((l) => available.has(l)) as SalaryRangeLabel[];
-  }, [displayJobs]);
-
-  // ─── Filtered results ──────────────────────────────────────────────────────
-
-  const filteredJobs = useMemo(() => {
-    const kw = filters.keyword.trim().toLowerCase();
-    return displayJobs.filter((job) => {
-      const title = (job.tieu_de || job.title || '').toLowerCase();
-      const company = (job.cong_ty || job.company || '').toLowerCase();
-      // Tách địa điểm thành mảng các thành phố để so sánh từng cái
-      const jobCities = splitLocations(job.dia_diem || job.location || '').map((c) => c.toLowerCase());
-      const categoryTags = (job.nganh_nghe || '').toLowerCase().split(',').map((c: string) => c.trim());
-      const jobWorkTypeTags = getWorkTypeTags(job.hinh_thuc_lam_viec);
-      const jobLevels = getLevels(job.cap_bac || '');
-      const jobExpBuckets = getExpBuckets(job.kinh_nghiem_lam_viec);
-      const jobSalaryBuckets = getSalaryBuckets(job.muc_luong || job.salary);
-
-      if (kw && !title.includes(kw) && !company.includes(kw)) return false;
-      // Job match nếu bất kỳ thành phố nào của job nằm trong filter được chọn
-      if (filters.locations.length && !filters.locations.some((l) => jobCities.includes(l.toLowerCase()))) return false;
-      if (filters.categories.length && !filters.categories.some((c) => categoryTags.includes(c.toLowerCase()))) return false;
-      if (filters.workTypes.length && !filters.workTypes.some((w) => jobWorkTypeTags.includes(w))) return false;
-      if (filters.levels.length && !filters.levels.some((l) => jobLevels.includes(l))) return false;
-      if (filters.experiences.length && !filters.experiences.some((b) => jobExpBuckets.includes(b as ExpRangeLabel))) return false;
-      if (filters.salaryBuckets.length && !filters.salaryBuckets.some((b) => jobSalaryBuckets.includes(b))) return false;
-      return true;
-    });
-  }, [displayJobs, filters]);
-
+  const filteredJobs = jobs; // Already filtered server-side
   const isExternalJobUrl = (url?: string) => typeof url === 'string' && /^https?:\/\//i.test(url);
 
   return (
@@ -579,7 +525,7 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
 
         <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
           <Link href="/search" className="text-blue-600 border-b-2 border-blue-600 pb-1">Job Search</Link>
-          <Link href="#" className="hover:text-blue-600 transition">Market Insights</Link>
+          <Link href="/insights" className="hover:text-blue-600 transition">Market Insights</Link>
           <Link href="/ai" className="hover:text-blue-600 transition">AI Assistant</Link>
           <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
         </div>
@@ -627,42 +573,13 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
               />
             </div>
 
-            <div className="hidden md:block w-px h-8 bg-gray-200" />
 
-            <div className="w-full md:w-56 flex items-center px-3 py-2">
-              <MapPin className="text-gray-400 mr-2" size={20} />
-              <select
-                value={filters.locations[0] || ''}
-                onChange={(e) => update('locations', e.target.value ? [e.target.value] : [])}
-                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
-              >
-                <option value="">Tất cả địa điểm</option>
-                {locationOptions.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
-                ))}
-              </select>
-              <ChevronDown className="text-gray-400" size={16} />
-            </div>
-
-            <div className="hidden md:block w-px h-8 bg-gray-200" />
-
-            <div className="w-full md:w-56 flex items-center px-3 py-2">
-              <Briefcase className="text-gray-400 mr-2" size={20} />
-              <select
-                value={filters.categories[0] || ''}
-                onChange={(e) => update('categories', e.target.value ? [e.target.value] : [])}
-                className="w-full outline-none text-slate-800 bg-transparent cursor-pointer appearance-none"
-              >
-                <option value="">Ngành nghề</option>
-                {categoryOptions.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-              <ChevronDown className="text-gray-400" size={16} />
-            </div>
 
             <button
-              onClick={() => setFilters(EMPTY_FILTERS)}
+              onClick={() => {
+                setFilters(EMPTY_FILTERS);
+                setCurrentPage(1);
+              }}
               className="w-full md:w-auto bg-[#2463eb] hover:bg-blue-700 text-white px-8 py-3 rounded-md font-bold transition"
             >
               XÓA TÌM KIẾM
@@ -677,6 +594,7 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
               selected={filters.locations}
               onToggle={(v) => toggleFilter('locations', v)}
               onClear={() => update('locations', [])}
+              searchable
             />
             <DropdownFilter
               label="Mức lương"
@@ -691,6 +609,7 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
               selected={filters.categories}
               onToggle={(v) => toggleFilter('categories', v)}
               onClear={() => update('categories', [])}
+              searchable
             />
             <DropdownFilter
               label="Hình thức"
@@ -705,6 +624,7 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
               selected={filters.levels}
               onToggle={(v) => toggleFilter('levels', v)}
               onClear={() => update('levels', [])}
+              searchable
             />
             <DropdownFilter
               label="Kinh nghiệm"
@@ -715,7 +635,10 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
             />
             {hasActiveFilters && (
               <button
-                onClick={() => setFilters(EMPTY_FILTERS)}
+                onClick={() => {
+                  setFilters(EMPTY_FILTERS);
+                  setCurrentPage(1);
+                }}
                 className="text-blue-200 hover:text-white text-sm px-3 py-2 underline underline-offset-2 transition flex items-center gap-1"
               >
                 <X size={13} /> Xóa lọc
@@ -731,23 +654,43 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-slate-800">
               Kết quả tìm kiếm phù hợp
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                ({filteredJobs.length} công việc)
-              </span>
+              {!isLoading && (
+                <span className="text-sm font-normal text-gray-500 ml-2">
+                  ({total} công việc)
+                </span>
+              )}
             </h2>
-            <div className="flex gap-2">
-              <button className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm">
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || isLoading}
+                className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 <ChevronLeft size={18} />
               </button>
-              <button className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm">
+              <span className="text-sm font-medium text-slate-700 px-2">
+                Trang {currentPage} / {totalPages || 1}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0 || isLoading}
+                className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 <ChevronRight size={18} />
               </button>
             </div>
           </div>
 
           {/* Danh sách việc làm */}
-          <div className="flex flex-col gap-4">
-            {filteredJobs.map((job, idx) => {
+          <div className="flex flex-col gap-4 relative min-h-[300px]">
+            {isLoading && (
+              <div className="absolute inset-0 bg-white/60 z-10 flex items-center justify-center rounded-xl">
+                <div className="flex flex-col items-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                  <span className="text-sm text-gray-500 font-medium">Đang tải...</span>
+                </div>
+              </div>
+            )}
+
+            {!isLoading && filteredJobs.map((job, idx) => {
               const title = sanitizeDisplayValue(job.tieu_de || job.title);
               const company = sanitizeDisplayValue(job.cong_ty || job.company);
               const salary = sanitizeDisplayValue(job.muc_luong || job.salary);
@@ -762,14 +705,24 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
                 <Link key={jobKey} href={`/job/${encodeURIComponent(encodeURIComponent(jobKey))}`} className="block group">
                   <div className="bg-white px-4 py-3 rounded-lg border border-blue-200 group-hover:border-blue-400 group-hover:shadow-md transition duration-200 flex gap-4 items-start">
                     {/* Logo */}
-                    <div className="w-14 h-14 bg-white rounded flex items-center justify-center flex-shrink-0 mt-1 border border-gray-100">
+                    <div className="w-14 h-14 bg-white rounded flex items-center justify-center flex-shrink-0 mt-1 border border-gray-100 relative overflow-hidden">
                       {isExternalJobUrl(logo) ? (
-                        <img
-                          src={logo}
-                          alt={isValidInfo(company) ? company : 'Company logo'}
-                          className="w-full h-full object-contain rounded-lg"
-                          loading="lazy"
-                        />
+                        <>
+                          <img
+                            src={logo}
+                            alt={isValidInfo(company) ? company : 'Company logo'}
+                            className="w-full h-full object-contain rounded-lg"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.logo-fallback') as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                          <span className="logo-fallback font-bold text-gray-400 text-xs text-center absolute inset-0 hidden items-center justify-center bg-white">
+                            {company ? company.substring(0, 4) : 'LOGO'}
+                          </span>
+                        </>
                       ) : (
                         <span className="font-bold text-gray-400 text-xs text-center">
                           {company ? company.substring(0, 4) : 'LOGO'}
@@ -801,10 +754,12 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
 
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center justify-between gap-3">
-                          {isValidInfo(salary) && (
+                          {isValidInfo(salary) ? (
                             <span className="text-sm md:text-base text-slate-800 font-medium truncate">{salary}</span>
+                          ) : (
+                            <div className="flex-1"></div>
                           )}
-                          <div className="text-[11px] md:text-xs text-gray-500 whitespace-nowrap text-right flex-shrink-0">
+                          <div className="text-[11px] md:text-xs text-gray-500 whitespace-nowrap text-right flex-shrink-0 ml-auto">
                             {isValidInfo(expireDate) ? `Hết hạn: ${expireDate}` : ''}
                           </div>
                         </div>
@@ -821,9 +776,30 @@ function JobSearchContent({ user, jobs = [] }: { user?: any; jobs?: any[] }) {
               );
             })}
 
-            {filteredJobs.length === 0 && (
+            {!isLoading && filteredJobs.length === 0 && (
               <div className="text-center py-10 bg-white rounded-xl border border-gray-200">
                 <p className="text-gray-500">Không có kết quả phù hợp với bộ lọc hiện tại.</p>
+              </div>
+            )}
+
+            {/* Pagination Controls at Bottom */}
+            {!isLoading && filteredJobs.length > 0 && (
+              <div className="flex justify-center items-center gap-4 mt-6">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  Trang trước
+                </button>
+                <span className="text-sm font-medium text-slate-700">
+                  Trang {currentPage} / {totalPages || 1}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-4 py-2 rounded-md border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-white hover:text-blue-600 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  Trang sau
+                </button>
               </div>
             )}
           </div>
