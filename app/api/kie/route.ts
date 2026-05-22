@@ -73,7 +73,7 @@ function extractKeyInfo(text: string) {
   const experience = experienceMatch ? experienceMatch[0] : 'Not found';
 
   // Extract education
-  const education = doc.match('#Noun').out('array').filter(word => ['bachelor', 'master', 'phd', 'degree'].includes(word.toLowerCase())).join(', ') || 'Not found';
+  const education = doc.match('#Noun').out('array').filter((word: any) => ['bachelor', 'master', 'phd', 'degree'].includes(word.toLowerCase())).join(', ') || 'Not found';
 
   return { name, email, phone, skills, experience, education };
 }

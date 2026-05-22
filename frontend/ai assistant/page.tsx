@@ -10,19 +10,29 @@ import {
   Send,
   Sparkles,
   Trash2,
+  Paperclip,
+  FileText,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { logout } from '@/backend/auth/actions';
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
+  taskType?: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface Chat {
   id: string;
   title: string;
   messages: Message[];
+  sessionId?: string;
+  resumeId?: string;
+  resumeName?: string;
 }
 
 const SAMPLE_CHATS: Chat[] = [
@@ -39,8 +49,13 @@ export default function AIAssistantPage({ user }: { user?: any }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const [resumeName, setResumeName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeChat = chats.find(c => c.id === activeChatId);
 
@@ -56,12 +71,18 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     setActiveChatId(null);
     setMessages([]);
     setInputValue('');
+    setSessionId(null);
+    setResumeId(null);
+    setResumeName(null);
   };
 
   const handleSelectChat = (chatId: string) => {
     setActiveChatId(chatId);
     const chat = chats.find(c => c.id === chatId);
     setMessages(chat?.messages || []);
+    setSessionId(chat?.sessionId || null);
+    setResumeId(chat?.resumeId || null);
+    setResumeName(chat?.resumeName || null);
   };
 
   const handleDeleteChat = (e: React.MouseEvent, chatId: string) => {
@@ -70,12 +91,15 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     if (activeChatId === chatId) {
       setActiveChatId(null);
       setMessages([]);
+      setSessionId(null);
+      setResumeId(null);
+      setResumeName(null);
     }
   };
 
   const handleSend = async () => {
     const text = inputValue.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
     const newMessages = [...messages, userMsg];
@@ -90,22 +114,46 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         id: Date.now().toString(),
         title: text.length > 40 ? text.slice(0, 40) + '...' : text,
         messages: [],
+        sessionId: sessionId || undefined,
+        resumeId: resumeId || undefined,
+        resumeName: resumeName || undefined,
       };
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(newChat.id);
       currentChatId = newChat.id;
     }
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponses: Record<string, string> = {
-        default: `Tôi hiểu bạn đang hỏi về "${text}". Đây là một chủ đề thú vị trong thị trường việc làm hiện nay. Hãy để tôi phân tích và đưa ra những thông tin hữu ích nhất cho bạn dựa trên dữ liệu thị trường mới nhất từ CareerIntel.`,
-      };
+    try {
+      // Call the chatbot API
+      const response = await fetch('/api/chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionId,
+          history: newMessages.slice(-10).map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+
+      const data = await response.json();
+
+      // Update session ID from backend
+      if (data.session_id && !sessionId) {
+        setSessionId(data.session_id);
+        setChats(prev => prev.map(c =>
+          c.id === currentChatId ? { ...c, sessionId: data.session_id } : c
+        ));
+      }
 
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: aiResponses.default,
+        content: data.response || 'Xin lỗi, tôi không thể trả lời lúc này.',
+        taskType: data.task_type,
+        metadata: data.metadata,
       };
 
       const updatedMessages = [...newMessages, aiMsg];
@@ -113,8 +161,127 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       setChats(prev => prev.map(c =>
         c.id === currentChatId ? { ...c, messages: updatedMessages } : c
       ));
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '❌ Không thể kết nối đến server. Vui lòng kiểm tra lại kết nối.',
+      };
+
+      const updatedMessages = [...newMessages, errorMsg];
+      setMessages(updatedMessages);
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId ? { ...c, messages: updatedMessages } : c
+      ));
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    setIsUploading(true);
+
+    // Show upload-in-progress message
+    const uploadMsg: Message = {
+      id: Date.now().toString(),
+      role: 'system',
+      content: `📤 Đang tải lên và xử lý **${file.name}**...`,
+    };
+
+    // Create chat if needed
+    let currentChatId = activeChatId;
+    if (!currentChatId) {
+      const newChat: Chat = {
+        id: Date.now().toString(),
+        title: `📄 ${file.name}`,
+        messages: [],
+      };
+      setChats(prev => [newChat, ...prev]);
+      setActiveChatId(newChat.id);
+      currentChatId = newChat.id;
+    }
+
+    const newMessages = [...messages, uploadMsg];
+    setMessages(newMessages);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (sessionId) {
+        formData.append('session_id', sessionId);
+      }
+
+      const response = await fetch('/api/chatbot/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Store resume context
+        setSessionId(data.session_id);
+        setResumeId(data.resume_id);
+        setResumeName(data.resume_name);
+
+        // Update chat with resume info
+        setChats(prev => prev.map(c =>
+          c.id === currentChatId ? {
+            ...c,
+            sessionId: data.session_id,
+            resumeId: data.resume_id,
+            resumeName: data.resume_name,
+          } : c
+        ));
+
+        const successMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.message || `✅ Đã xử lý thành công **${file.name}**`,
+          taskType: 'upload',
+        };
+
+        const updatedMessages = [...newMessages, successMsg];
+        setMessages(updatedMessages);
+        setChats(prev => prev.map(c =>
+          c.id === currentChatId ? { ...c, messages: updatedMessages } : c
+        ));
+      } else {
+        const errorMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.message || `❌ Lỗi xử lý file: ${data.error}`,
+        };
+
+        const updatedMessages = [...newMessages, errorMsg];
+        setMessages(updatedMessages);
+        setChats(prev => prev.map(c =>
+          c.id === currentChatId ? { ...c, messages: updatedMessages } : c
+        ));
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '❌ Không thể kết nối đến server để tải file. Vui lòng thử lại.',
+      };
+
+      const updatedMessages = [...newMessages, errorMsg];
+      setMessages(updatedMessages);
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId ? { ...c, messages: updatedMessages } : c
+      ));
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -240,6 +407,17 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
         {/* MAIN CHAT AREA */}
         <main className="flex-1 flex flex-col overflow-hidden bg-[#f4f2ee]">
+          {/* Resume badge if one is loaded */}
+          {resumeName && (
+            <div className="px-6 pt-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs text-blue-700">
+                <FileText size={12} />
+                <span className="font-medium">{resumeName}</span>
+                <CheckCircle2 size={12} className="text-green-500" />
+              </div>
+            </div>
+          )}
+
           {messages.length === 0 ? (
             /* Welcome Screen */
             <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
@@ -248,7 +426,10 @@ export default function AIAssistantPage({ user }: { user?: any }) {
                   <Sparkles size={28} className="text-blue-500" />
                 </div>
                 <h1 className="text-3xl font-bold text-slate-800">Where should we begin?</h1>
-                <p className="text-gray-500 text-sm max-w-md">Ask me anything about the job market, recruitment trends, or career advice.</p>
+                <p className="text-gray-500 text-sm max-w-md">
+                  Ask me anything about the job market, recruitment trends, or career advice.
+                  Upload your CV to get personalized feedback.
+                </p>
               </div>
 
               {/* Suggestion chips */}
@@ -271,6 +452,9 @@ export default function AIAssistantPage({ user }: { user?: any }) {
                   onChange={setInputValue}
                   onSend={handleSend}
                   onKeyDown={handleKeyDown}
+                  onFileClick={() => fileInputRef.current?.click()}
+                  isLoading={isTyping}
+                  isUploading={isUploading}
                 />
               </div>
             </div>
@@ -285,14 +469,24 @@ export default function AIAssistantPage({ user }: { user?: any }) {
                         <Sparkles size={16} className="text-white" />
                       </div>
                     )}
+                    {msg.role === 'system' && (
+                      <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center shrink-0 mt-1">
+                        <Loader2 size={16} className="text-white animate-spin" />
+                      </div>
+                    )}
                     <div
                       className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                         msg.role === 'user'
                           ? 'bg-blue-600 text-white rounded-br-sm'
+                          : msg.role === 'system'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200 rounded-bl-sm'
                           : 'bg-white text-slate-800 border border-gray-200 rounded-bl-sm'
                       }`}
                     >
-                      {msg.content}
+                      <div
+                        className="prose prose-sm max-w-none prose-headings:text-slate-800 prose-strong:text-slate-800 prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:rounded"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -321,45 +515,130 @@ export default function AIAssistantPage({ user }: { user?: any }) {
                   onChange={setInputValue}
                   onSend={handleSend}
                   onKeyDown={handleKeyDown}
+                  onFileClick={() => fileInputRef.current?.click()}
+                  isLoading={isTyping}
+                  isUploading={isUploading}
                 />
               </div>
             </>
           )}
         </main>
       </div>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
     </div>
   );
 }
+
+
+// ── ChatInput Component ─────────────────────────────────
 
 function ChatInput({
   value,
   onChange,
   onSend,
   onKeyDown,
+  onFileClick,
+  isLoading,
+  isUploading,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onFileClick: () => void;
+  isLoading?: boolean;
+  isUploading?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-      <Plus size={18} className="text-gray-400 shrink-0" />
+      <button
+        onClick={onFileClick}
+        disabled={isUploading}
+        title="Tải lên CV (PDF/DOCX)"
+        className="text-gray-400 hover:text-blue-600 shrink-0 transition-colors disabled:opacity-50"
+      >
+        {isUploading ? (
+          <Loader2 size={18} className="animate-spin" />
+        ) : (
+          <Paperclip size={18} />
+        )}
+      </button>
       <textarea
         rows={1}
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Ask anything"
-        className="flex-1 bg-transparent outline-none resize-none text-sm text-slate-800 placeholder-gray-400 leading-6 max-h-40 overflow-y-auto"
+        placeholder={isUploading ? 'Đang xử lý file...' : 'Ask anything'}
+        disabled={isUploading}
+        className="flex-1 bg-transparent outline-none resize-none text-sm text-slate-800 placeholder-gray-400 leading-6 max-h-40 overflow-y-auto disabled:opacity-50"
       />
       <button
         onClick={onSend}
-        disabled={!value.trim()}
+        disabled={!value.trim() || isLoading || isUploading}
         className="w-8 h-8 rounded-full bg-blue-600 disabled:bg-gray-200 flex items-center justify-center transition-colors hover:bg-blue-700 shrink-0"
       >
-        <Send size={14} className={value.trim() ? 'text-white' : 'text-gray-400'} />
+        {isLoading ? (
+          <Loader2 size={14} className="text-white animate-spin" />
+        ) : (
+          <Send size={14} className={value.trim() ? 'text-white' : 'text-gray-400'} />
+        )}
       </button>
     </div>
   );
+}
+
+
+// ── Simple Markdown Renderer ────────────────────────────
+
+function renderMarkdown(text: string): string {
+  if (!text) return '';
+
+  let html = text
+    // Escape HTML (but preserve our markdown transformations)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3 class="text-base font-bold mt-4 mb-2">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-4 mb-2">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>')
+
+    // Bold and italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code class="text-xs bg-blue-50 text-blue-700 px-1 py-0.5 rounded">$1</code>')
+
+    // Code blocks
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 rounded-lg p-3 my-2 overflow-x-auto text-xs"><code>$2</code></pre>')
+
+    // Blockquotes
+    .replace(/^&gt; (.+)$/gm, '<blockquote class="border-l-4 border-blue-300 pl-3 my-2 text-gray-600 italic">$1</blockquote>')
+
+    // Unordered lists
+    .replace(/^(\s*)- (.+)$/gm, (_, indent, content) => {
+      const level = indent.length >= 2 ? 'ml-4' : '';
+      return `<li class="list-disc list-inside ${level} my-0.5">${content}</li>`;
+    })
+
+    // Horizontal rules
+    .replace(/^---$/gm, '<hr class="my-4 border-gray-200" />')
+
+    // Line breaks (double newline → paragraph break)
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+
+  return html;
 }

@@ -35,7 +35,7 @@ export async function signup(prevState: any, formData: FormData) {
   const name = formData.get('name') as string
 
   if (!email || !password || !name) {
-    return { error: 'Please fill in all fields.' }
+    return { error: 'Please fill in all fields.', success: null }
   }
 
   // Pass name to user metadata
@@ -50,11 +50,11 @@ export async function signup(prevState: any, formData: FormData) {
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: error.message, success: null }
   }
 
   // Trở về một chuỗi thành công để giao diện hiển thị thông báo check email
-  return { success: 'Đăng ký thành công! Vui lòng kiểm tra email của bạn để xác nhận tài khoản.' }
+  return { success: 'Đăng ký thành công! Vui lòng kiểm tra email của bạn để xác nhận tài khoản.', error: null }
 }
 
 export async function logout() {
