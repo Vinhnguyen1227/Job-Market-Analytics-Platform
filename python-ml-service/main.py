@@ -17,10 +17,11 @@ class RawJobInput(BaseModel):
     cong_ty: str
     dia_diem: str
     mo_ta_cong_viec: Optional[str] = ""
-    # Add other fields as needed
     muc_luong: Optional[str] = "Thỏa thuận"
     logo: Optional[str] = ""
     hinh_thuc_lam_viec: Optional[str] = "Toàn thời gian"
+    nganh_nghe: Optional[str] = ""
+    thong_tin_tuyen_dung: Optional[dict] = None
 
 @app.get("/health")
 def health_check():
@@ -36,35 +37,46 @@ def process_job(job: RawJobInput):
         norm_company = clean_company_name(job.cong_ty)
         norm_location = clean_location(job.dia_diem)
         
-        # Phase 2: Semantic Normalization (Title & Skills)
+        # Phase 2: Semantic Normalization
         normalizer = get_semantic_normalizer()
-        norm_title = normalizer.normalize_title(job.tieu_de)
         
+        # Clean up title using basic Regex instead of AI
+        clean_title = normalizer.normalize_title(job.tieu_de)
+        
+        # Extract mo_ta_cong_viec (it might be nested inside thong_tin_tuyen_dung)
+        actual_description = job.mo_ta_cong_viec
+        if (not actual_description or actual_description == "N/A") and job.thong_tin_tuyen_dung:
+            actual_description = job.thong_tin_tuyen_dung.get("mo_ta_cong_viec", "")
+
+        # Normalize Tag using Gemini
+        norm_tag = normalizer.normalize_tag(clean_title, job.nganh_nghe, actual_description)
+
+        # Extract Skills using Gemini
         skills = []
-        if job.mo_ta_cong_viec and job.mo_ta_cong_viec != "N/A":
-            skills = normalizer.extract_skills_json(job.mo_ta_cong_viec)
+        if actual_description and actual_description != "N/A":
+            skills = normalizer.extract_skills_json(actual_description)
             
-        # Convert skills list to JSONB compatible string if needed, or keep as list 
-        # depending on Supabase column type (jsonb or text[])
-        
         # Phase 3: Hashing Engine
-        job_hash = generate_job_hash(norm_company, norm_title, norm_location)
+        job_hash = generate_job_hash(norm_company, clean_title, norm_location)
         
         # Construct the final normalized object
         normalized_job_data = {
             "job_hash_id": job_hash,
             "url": job.url,
-            "tieu_de_goc": job.tieu_de,
-            "tieu_de_chuan_hoa": norm_title,
+            "tieu_de": clean_title,                 # Đã dọn rác bằng Regex
+            "cong_ty": job.cong_ty,                 # Required original column
+            "dia_diem": job.dia_diem,               # Required original column
             "cong_ty_goc": job.cong_ty,
             "cong_ty_chuan_hoa": norm_company,
             "dia_diem_goc": job.dia_diem,
             "dia_diem_chuan_hoa": norm_location,
+            "nganh_nghe_goc": job.nganh_nghe,
+            "nganh_nghe_chuan_hoa": norm_tag,
             "ky_nang": skills, # Assumes jsonb column
             "muc_luong": job.muc_luong,
             "logo": job.logo,
             "hinh_thuc_lam_viec": job.hinh_thuc_lam_viec,
-            "mo_ta_cong_viec": job.mo_ta_cong_viec
+            "mo_ta_cong_viec": actual_description
         }
         
         # Phase 4: Efficient Upsert

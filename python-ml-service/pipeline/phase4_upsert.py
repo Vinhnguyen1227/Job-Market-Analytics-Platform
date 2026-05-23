@@ -28,9 +28,10 @@ def upsert_job(job_data: dict) -> dict:
         # Note: In supabase-py, upsert automatically uses the Primary Key to resolve conflicts.
         # If job_hash_id is a UNIQUE constraint but not PK, you might need to specify on_conflict.
         # supabase-py v2 allows passing on_conflict
+        # Perform upsert using URL as the unique identifier to avoid duplicate URL errors
         response = (
             supabase.table('jobs')
-            .upsert(job_data, on_conflict='job_hash_id')
+            .upsert(job_data, on_conflict='url')
             .execute()
         )
         return {"success": True, "data": response.data}

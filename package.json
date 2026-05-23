@@ -12,6 +12,7 @@
     "jobs:worker": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/queue.ts",
     "jobs:cron": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/cron.ts",
     "jobs:github": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/github_action.ts",
+    "migrate:all": "ts-node --project tsconfig.scripts.json --transpile-only backend/jobs/migrate_all_jobs.ts",
     "es:sync": "ts-node --project tsconfig.scripts.json --transpile-only backend/elasticsearch/sync.ts"
   },
   "dependencies": {
