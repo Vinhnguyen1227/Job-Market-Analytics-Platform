@@ -19,13 +19,33 @@ async function runAllJobs() {
   const results = await scrapeJoboko();
   
   if (results.length > 0) {
-    console.log(`Tiến hành lưu ${results.length} jobs vào Supabase...`);
-    const { error } = await supabase.from('jobs').upsert(results, { onConflict: 'url' });
-    if (error) {
-      console.error('Lỗi khi insert vào Supabase:', error);
-    } else {
-      console.log('Lưu Database thành công!');
+    console.log(`Tiến hành gửi ${results.length} jobs sang Python ML Service để chuẩn hóa và lưu...`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const job of results) {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/v1/jobs/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(job),
+        });
+        
+        if (res.ok) {
+          successCount++;
+        } else {
+          const errorText = await res.text();
+          console.error(`Lỗi ML API cho job ${job.url}:`, errorText);
+          failCount++;
+        }
+      } catch (err) {
+        console.error(`Không thể kết nối ML API cho job ${job.url}:`, err);
+        failCount++;
+      }
     }
+    
+    console.log(`Hoàn tất xử lý ML: Thành công ${successCount}, Thất bại ${failCount}`);
   } else {
     console.log('Không tìm thấy dữ liệu mới nào.');
   }
