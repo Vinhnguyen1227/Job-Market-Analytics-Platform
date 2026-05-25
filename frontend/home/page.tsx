@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import Navbar from '@/frontend/components/Navbar';
 
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, BarChart2, Briefcase, ChevronDown } from 'lucide-react';
@@ -145,53 +146,7 @@ export default function HomePage({ user }: { user?: any }) {
     <div className="min-h-screen font-sans bg-[#f4f2ee] flex flex-col relative overflow-hidden">
 
       {/* --- HEADER / NAVBAR --- */}
-      <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
-            <BarChart2 size={24} className="text-blue-400" />
-          </div>
-          <span className="font-bold text-2xl text-slate-800">
-            Career<span className="text-blue-600">Intel</span>
-            <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
-          </span>
-        </div>
-
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <a href="/search" className="hover:text-blue-600 transition">Job Search</a>
-          <a href="/insights" className="hover:text-blue-600 transition">Market Insights</a>
-          <a href="/ai" className="hover:text-blue-600 transition">AI Assistant</a>
-          <a href="/profile" className="hover:text-blue-600 transition">My Profile</a>
-        </div>
-
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          {user ? (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                  {user.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-                <span>Hi, {user.user_metadata?.full_name || 'User'}</span>
-              </div>
-              <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block cursor-pointer">
-                Log Out
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/signup">
-                <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">
-                  Sign Up
-                </button>
-              </Link>
-              <Link href="/login">
-                <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">
-                  Log In
-                </button>
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <Navbar user={user} activeTab="none" />
 
       {/* --- HERO SECTION --- */}
       <div className="bg-gradient-to-r from-[#0f3057] via-[#1a4b6b] to-[#127d73] pt-20 pb-48 px-4 relative">

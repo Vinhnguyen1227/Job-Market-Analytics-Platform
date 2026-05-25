@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import RequireLogin from '@/frontend/components/RequireLogin';
+import Navbar from '@/frontend/components/Navbar';
 import {
   BarChart2,
   Plus,
@@ -134,199 +136,161 @@ export default function AIAssistantPage({ user }: { user?: any }) {
   return (
     <div className="flex flex-col h-screen bg-[#f4f2ee]">
       {/* --- NAVBAR --- */}
-      <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm shrink-0">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
-            <BarChart2 size={24} className="text-blue-400" />
-          </div>
-          <span className="font-bold text-2xl text-slate-800">
-            Career<span className="text-blue-600">Intel</span>
-            <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
-          </span>
-        </Link>
-
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <Link href="/search" className="hover:text-blue-600 transition">Job Search</Link>
-          <Link href="/insights" className="hover:text-blue-600 transition">Market Insights</Link>
-          <Link href="/ai" className="text-blue-600 border-b-2 border-blue-600 pb-1">AI Assistant</Link>
-          <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
-        </div>
-
-        <div className="hidden lg:flex items-center gap-4 font-semibold text-sm text-slate-800">
-          {user ? (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                  {user.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-                <span>Hi, {user.user_metadata?.full_name || 'User'}</span>
-              </div>
-              <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm cursor-pointer">
-                Log Out
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/signup">
-                <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md">Sign Up</button>
-              </Link>
-              <Link href="/login">
-                <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm">Log In</button>
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <Navbar user={user} activeTab="ai" />
 
       {/* --- BODY: SIDEBAR + CHAT AREA --- */}
-      <div className="flex flex-1 overflow-hidden">
+      {user ? (
+        <div className="flex flex-1 overflow-hidden">
 
-        {/* SIDEBAR */}
-        <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
-          {/* New Chat + Search */}
-          <div className="p-3 flex flex-col gap-2 border-b border-gray-100">
-            <button
-              onClick={handleNewChat}
-              className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-slate-700 font-semibold text-sm hover:bg-[#f4f2ee] transition-colors"
-            >
-              <Plus size={18} className="text-blue-600" />
-              New chat
-            </button>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#f4f2ee] text-gray-500">
-              <Search size={15} />
-              <input
-                type="text"
-                placeholder="Search chats"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="bg-transparent outline-none text-sm w-full text-slate-700 placeholder-gray-400"
-              />
-            </div>
-          </div>
-
-          {/* Chat History */}
-          <div className="flex-1 overflow-y-auto py-2">
-            {filteredChats.length > 0 ? (
-              <>
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-2">Recents</p>
-                {filteredChats.map(chat => (
-                  <div
-                    key={chat.id}
-                    onClick={() => handleSelectChat(chat.id)}
-                    className={`group flex items-center justify-between gap-2 px-4 py-2.5 cursor-pointer rounded-lg mx-2 transition-colors ${
-                      activeChatId === chat.id
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'hover:bg-[#f4f2ee] text-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <MessageSquare size={15} className="shrink-0 text-gray-400" />
-                      <span className="text-sm truncate">{chat.title}</span>
-                    </div>
-                    <button
-                      onClick={e => handleDeleteChat(e, chat.id)}
-                      className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </>
-            ) : (
-              <p className="text-sm text-gray-400 text-center mt-8 px-4">No chat history found.</p>
-            )}
-          </div>
-        </aside>
-
-        {/* MAIN CHAT AREA */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-[#f4f2ee]">
-          {messages.length === 0 ? (
-            /* Welcome Screen */
-            <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
-              <div className="flex flex-col items-center gap-3 text-center">
-                <div className="w-14 h-14 bg-white rounded-2xl shadow-md flex items-center justify-center border border-gray-100">
-                  <Sparkles size={28} className="text-blue-500" />
-                </div>
-                <h1 className="text-3xl font-bold text-slate-800">Where should we begin?</h1>
-                <p className="text-gray-500 text-sm max-w-md">Ask me anything about the job market, recruitment trends, or career advice.</p>
-              </div>
-
-              {/* Suggestion chips */}
-              <div className="grid grid-cols-2 gap-3 max-w-xl w-full">
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setInputValue(s); }}
-                    className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all text-left shadow-sm"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-
-              {/* Input at center */}
-              <div className="w-full max-w-2xl">
-                <ChatInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onSend={handleSend}
-                  onKeyDown={handleKeyDown}
+          {/* SIDEBAR */}
+          <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+            {/* New Chat + Search */}
+            <div className="p-3 flex flex-col gap-2 border-b border-gray-100">
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-slate-700 font-semibold text-sm hover:bg-[#f4f2ee] transition-colors"
+              >
+                <Plus size={18} className="text-blue-600" />
+                New chat
+              </button>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#f4f2ee] text-gray-500">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Search chats"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="bg-transparent outline-none text-sm w-full text-slate-700 placeholder-gray-400"
                 />
               </div>
             </div>
-          ) : (
-            /* Active Chat */
-            <>
-              <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4 max-w-3xl mx-auto w-full">
-                {messages.map(msg => (
-                  <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'assistant' && (
+
+            {/* Chat History */}
+            <div className="flex-1 overflow-y-auto py-2">
+              {filteredChats.length > 0 ? (
+                <>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-2">Recents</p>
+                  {filteredChats.map(chat => (
+                    <div
+                      key={chat.id}
+                      onClick={() => handleSelectChat(chat.id)}
+                      className={`group flex items-center justify-between gap-2 px-4 py-2.5 cursor-pointer rounded-lg mx-2 transition-colors ${
+                        activeChatId === chat.id
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'hover:bg-[#f4f2ee] text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MessageSquare size={15} className="shrink-0 text-gray-400" />
+                        <span className="text-sm truncate">{chat.title}</span>
+                      </div>
+                      <button
+                        onClick={e => handleDeleteChat(e, chat.id)}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <p className="text-sm text-gray-400 text-center mt-8 px-4">No chat history found.</p>
+              )}
+            </div>
+          </aside>
+
+          {/* MAIN CHAT AREA */}
+          <main className="flex-1 flex flex-col overflow-hidden bg-[#f4f2ee]">
+            {messages.length === 0 ? (
+              /* Welcome Screen */
+              <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="w-14 h-14 bg-white rounded-2xl shadow-md flex items-center justify-center border border-gray-100">
+                    <Sparkles size={28} className="text-blue-500" />
+                  </div>
+                  <h1 className="text-3xl font-bold text-slate-800">Where should we begin?</h1>
+                  <p className="text-gray-500 text-sm max-w-md">Ask me anything about the job market, recruitment trends, or career advice.</p>
+                </div>
+
+                {/* Suggestion chips */}
+                <div className="grid grid-cols-2 gap-3 max-w-xl w-full">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setInputValue(s); }}
+                      className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all text-left shadow-sm"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input at center */}
+                <div className="w-full max-w-2xl">
+                  <ChatInput
+                    value={inputValue}
+                    onChange={setInputValue}
+                    onSend={handleSend}
+                    onKeyDown={handleKeyDown}
+                  />
+                </div>
+              </div>
+            ) : (
+              /* Active Chat */
+              <>
+                <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4 max-w-3xl mx-auto w-full">
+                  {messages.map(msg => (
+                    <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.role === 'assistant' && (
+                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
+                          <Sparkles size={16} className="text-white" />
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                          msg.role === 'user'
+                            ? 'bg-blue-600 text-white rounded-br-sm'
+                            : 'bg-white text-slate-800 border border-gray-200 rounded-bl-sm'
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+
+                  {isTyping && (
+                    <div className="flex gap-3 justify-start">
                       <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
                         <Sparkles size={16} className="text-white" />
                       </div>
-                    )}
-                    <div
-                      className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                        msg.role === 'user'
-                          ? 'bg-blue-600 text-white rounded-br-sm'
-                          : 'bg-white text-slate-800 border border-gray-200 rounded-bl-sm'
-                      }`}
-                    >
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-
-                {isTyping && (
-                  <div className="flex gap-3 justify-start">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
-                      <Sparkles size={16} className="text-white" />
-                    </div>
-                    <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-                      <div className="flex gap-1.5 items-center h-5">
-                        <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                        <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                        <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                      <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                        <div className="flex gap-1.5 items-center h-5">
+                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
 
-              {/* Input at bottom */}
-              <div className="px-6 pb-6 max-w-3xl mx-auto w-full">
-                <ChatInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onSend={handleSend}
-                  onKeyDown={handleKeyDown}
-                />
-              </div>
-            </>
-          )}
-        </main>
-      </div>
+                {/* Input at bottom */}
+                <div className="px-6 pb-6 max-w-3xl mx-auto w-full">
+                  <ChatInput
+                    value={inputValue}
+                    onChange={setInputValue}
+                    onSend={handleSend}
+                    onKeyDown={handleKeyDown}
+                  />
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      ) : (
+        <RequireLogin type="ai" />
+      )}
     </div>
   );
 }
