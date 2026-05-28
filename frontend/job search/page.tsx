@@ -3,6 +3,7 @@
 import React, { useMemo, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Navbar from '@/frontend/components/Navbar';
 import {
   Search, MapPin, Briefcase, ChevronDown,
   ChevronLeft, ChevronRight, BarChart2, X
@@ -512,49 +513,7 @@ function JobSearchContent({ user }: { user?: any }) {
     <div className="min-h-screen bg-[#f4f2ee] font-sans flex flex-col">
 
       {/* ── HEADER ── */}
-      <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white">
-            <BarChart2 size={24} className="text-blue-400" />
-          </div>
-          <span className="font-bold text-2xl text-slate-800">
-            Career<span className="text-blue-600">Intel</span>
-            <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
-          </span>
-        </Link>
-
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          <Link href="/search" className="text-blue-600 border-b-2 border-blue-600 pb-1">Job Search</Link>
-          <Link href="/insights" className="hover:text-blue-600 transition">Market Insights</Link>
-          <Link href="/ai" className="hover:text-blue-600 transition">AI Assistant</Link>
-          <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
-        </div>
-
-        <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-          {user ? (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                  {user.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-                <span>Hi, {user.user_metadata?.full_name || 'User'}</span>
-              </div>
-              <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block cursor-pointer">
-                Log Out
-              </button>
-            </>
-          ) : (
-            <>
-              <Link href="/signup">
-                <button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-6 py-2.5 rounded-md font-medium transition shadow-md hidden md:block">Sign Up</button>
-              </Link>
-              <Link href="/login">
-                <button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-6 py-2.5 rounded-md font-medium transition shadow-sm hidden md:block">Log In</button>
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <Navbar user={user} activeTab="search" />
 
       {/* ── FILTER PANEL ── */}
       <div className="bg-[#1a4b6b] py-6 px-4 md:px-12 w-full shadow-inner">

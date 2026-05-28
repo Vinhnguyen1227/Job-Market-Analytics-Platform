@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import Navbar from "@/frontend/components/Navbar";
 import { BarChart2, ChevronDown, ArrowUpRight, X } from "lucide-react";
 import { logout } from "@/backend/auth/actions";
 
@@ -69,50 +70,7 @@ function computeStats(jobs: any[]) {
   };
 }
 
-// ─── Navbar ────────────────────────────────────────────────────────────────────
-function Navbar({ user }: { user?: any }) {
-  return (
-    <nav className="flex justify-between items-center px-6 md:px-12 py-4 bg-white z-20 relative shadow-sm sticky top-0">
-      <Link href="/" className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center">
-          <BarChart2 size={24} className="text-blue-400" />
-        </div>
-        <span className="font-bold text-2xl text-slate-800">
-          Career<span className="text-blue-600">Intel</span>
-          <span className="block text-[10px] text-gray-500 font-normal -mt-1">Intelligent Job Market Hub</span>
-        </span>
-      </Link>
 
-      <div className="hidden lg:flex items-center gap-8 font-semibold text-sm text-slate-800">
-        <Link href="/search" className="hover:text-blue-600 transition">Job Search</Link>
-        <Link href="/insights" className="text-blue-600 border-b-2 border-blue-600 pb-1">Market Insights</Link>
-        <Link href="/ai" className="hover:text-blue-600 transition">AI Assistant</Link>
-        <Link href="/profile" className="hover:text-blue-600 transition">My Profile</Link>
-      </div>
-
-      <div className="hidden lg:flex items-center gap-4 font-semibold text-sm text-slate-800">
-        {user ? (
-          <>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                {user.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || "U"}
-              </div>
-              <span>Hi, {user.user_metadata?.full_name || "User"}</span>
-            </div>
-            <button onClick={() => logout()} className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-5 py-2 rounded-md font-medium transition cursor-pointer">
-              Log Out
-            </button>
-          </>
-        ) : (
-          <>
-            <Link href="/signup"><button className="bg-[#f27a42] hover:bg-[#e06830] text-white px-5 py-2 rounded-md font-medium transition shadow-md">Sign Up</button></Link>
-            <Link href="/login"><button className="bg-gray-100 hover:bg-gray-200 text-slate-800 px-5 py-2 rounded-md font-medium transition">Log In</button></Link>
-          </>
-        )}
-      </div>
-    </nav>
-  );
-}
 
 // ─── Salary bar (single row) ───────────────────────────────────────────────────
 function SalaryBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
@@ -293,7 +251,7 @@ export default function MarketInsightsPage({ user, jobs = [] }: { user?: any; jo
 
   return (
     <div className="min-h-screen bg-[#f4f2ee] font-sans flex flex-col">
-      <Navbar user={user} />
+      <Navbar user={user} activeTab="insights" />
 
       {/* ── Hero ── */}
       <div className="bg-gradient-to-r from-[#0f3057] via-[#1a4b6b] to-[#127d73] pt-7 pb-8 px-6">
