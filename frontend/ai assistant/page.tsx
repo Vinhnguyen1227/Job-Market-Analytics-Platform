@@ -97,6 +97,79 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     }
   };
 
+  const pollJobStatus = async (jobId: string, chatId: string, baseMessages: Message[]) => {
+    let attempts = 0;
+    
+    const placeholderMsg: Message = {
+      id: Date.now().toString(),
+      role: 'system',
+      content: '⏳ Đang xử lý yêu cầu...',
+    };
+    
+    setMessages([...baseMessages, placeholderMsg]);
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, placeholderMsg] } : c));
+    
+    while (attempts < 60) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        const res = await fetch(`/api/chatbot/status/${jobId}`);
+        if (!res.ok) continue;
+        const statusData = await res.json();
+        
+        if (statusData.status === 'COMPLETED') {
+          const result = statusData.result || {};
+          
+          if (result.session_id) {
+            setSessionId(result.session_id);
+          }
+          if (result.resume_id) {
+            setResumeId(result.resume_id);
+            setResumeName(result.resume_name);
+          }
+          
+          setChats(prev => prev.map(c => c.id === chatId ? { 
+            ...c, 
+            sessionId: result.session_id || c.sessionId,
+            resumeId: result.resume_id || c.resumeId,
+            resumeName: result.resume_name || c.resumeName
+          } : c));
+          
+          const finalMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: result.response || result.message || '✅ Hoàn tất',
+            taskType: result.task_type || (result.resume_id ? 'upload' : undefined),
+            metadata: result.metadata,
+          };
+          
+          setMessages([...baseMessages, finalMsg]);
+          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, finalMsg] } : c));
+          return;
+        } else if (statusData.status === 'FAILED' || statusData.status === 'ERROR') {
+          const errorMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `❌ Lỗi: ${statusData.error || 'Xử lý thất bại.'}`,
+          };
+          setMessages([...baseMessages, errorMsg]);
+          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, errorMsg] } : c));
+          return;
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+      attempts++;
+    }
+    
+    const timeoutMsg: Message = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: '❌ Hết thời gian chờ xử lý từ server. Vui lòng thử lại.',
+    };
+    setMessages([...baseMessages, timeoutMsg]);
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, timeoutMsg] } : c));
+  };
+
   const handleSend = async () => {
     const text = inputValue.trim();
     if (!text || isTyping) return;
@@ -140,27 +213,31 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
       const data = await response.json();
 
-      // Update session ID from backend
-      if (data.session_id && !sessionId) {
-        setSessionId(data.session_id);
+      if (data.job_id) {
+        pollJobStatus(data.job_id, currentChatId, newMessages);
+      } else {
+        // Update session ID from backend
+        if (data.session_id && !sessionId) {
+          setSessionId(data.session_id);
+          setChats(prev => prev.map(c =>
+            c.id === currentChatId ? { ...c, sessionId: data.session_id } : c
+          ));
+        }
+
+        const aiMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.response || 'Xin lỗi, tôi không thể trả lời lúc này.',
+          taskType: data.task_type,
+          metadata: data.metadata,
+        };
+
+        const updatedMessages = [...newMessages, aiMsg];
+        setMessages(updatedMessages);
         setChats(prev => prev.map(c =>
-          c.id === currentChatId ? { ...c, sessionId: data.session_id } : c
+          c.id === currentChatId ? { ...c, messages: updatedMessages } : c
         ));
       }
-
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response || 'Xin lỗi, tôi không thể trả lời lúc này.',
-        taskType: data.task_type,
-        metadata: data.metadata,
-      };
-
-      const updatedMessages = [...newMessages, aiMsg];
-      setMessages(updatedMessages);
-      setChats(prev => prev.map(c =>
-        c.id === currentChatId ? { ...c, messages: updatedMessages } : c
-      ));
     } catch (error) {
       console.error('Chat error:', error);
       const errorMsg: Message = {
@@ -225,7 +302,9 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.job_id) {
+        pollJobStatus(data.job_id, currentChatId, newMessages);
+      } else if (data.success) {
         // Store resume context
         setSessionId(data.session_id);
         setResumeId(data.resume_id);

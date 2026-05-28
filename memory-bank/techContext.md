@@ -32,5 +32,5 @@
   * **Phase 1-generator**: 15 symbols (cohesion: 91%)
   * **Tasks**: 14 symbols (cohesion: 100%)
   * **Auth**: 12 symbols (cohesion: 87%)
-  * **Ai assistant**: 7 symbols (cohesion: 92%)
+  * **AI assistant**: 7 symbols (cohesion: 92%)
 

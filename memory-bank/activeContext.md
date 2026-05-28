@@ -4,7 +4,7 @@
 * ML async queue added to FastAPI chatbot backend.
 
 ## Current State
-* Re-run build succeeded after resolving typescript issues (pdf-parse typings, explicit filter parameter type, and signup action return type alignment).
+* Re-run build succeeded after resolving TypeScript issues (pdf-parse typings, explicit filter parameter type, and signup action return type alignment).
 * Next.js development server running on `http://localhost:3000`.
 * FastAPI chatbot backend running on `http://127.0.0.1:8000`.
 * Codebase successfully re-indexed using GitNexus (`2,503` nodes, `4,105` edges, `60` clusters, `103` flows).

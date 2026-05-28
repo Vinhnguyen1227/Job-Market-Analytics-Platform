@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 1: Forward file to FastAPI
-    const fastApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const fastApiUrl = process.env.CHATBOT_BACKEND_URL || 'http://127.0.0.1:8000';
     
     // Create new FormData to forward
     const forwardData = new FormData();

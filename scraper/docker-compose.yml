@@ -36,7 +36,8 @@ services:
   # ── Chatbot Workers ─────────────────────────────────
   chatbot-heavy:
     build:
-      context: ../backend/chatbot
+      context: ..
+      dockerfile: backend/chatbot/Dockerfile
     command: celery -A celery_app worker -Q heavy --concurrency=2 --loglevel=info
     volumes:
       - ../backend/chatbot:/app
@@ -50,7 +51,8 @@ services:
 
   chatbot-medium:
     build:
-      context: ../backend/chatbot
+      context: ..
+      dockerfile: backend/chatbot/Dockerfile
     command: celery -A celery_app worker -Q medium --concurrency=2 --loglevel=info
     volumes:
       - ../backend/chatbot:/app
@@ -64,7 +66,8 @@ services:
 
   chatbot-light:
     build:
-      context: ../backend/chatbot
+      context: ..
+      dockerfile: backend/chatbot/Dockerfile
     command: celery -A celery_app worker -Q light --concurrency=4 --loglevel=info
     volumes:
       - ../backend/chatbot:/app
