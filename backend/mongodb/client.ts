@@ -1,13 +1,12 @@
 import { MongoClient, Db } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
+const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'job_market_analytics';
 
 if (!MONGODB_URI) {
-  throw new Error(
-    '[MongoDB] MONGODB_URI chưa được cấu hình trong .env.local'
-  );
+  throw new Error('❌ LỖI HỆ THỐNG: Thiếu cấu hình MONGODB_URI trong biến môi trường! Vui lòng định nghĩa trong file .env.local hoặc thiết lập biến hệ thống.');
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Singleton pattern — tránh tạo nhiều connection trong Next.js

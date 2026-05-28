@@ -1,0 +1,16 @@
+# Loại bỏ các thư mục nặng để tăng tốc truyền tải Context sang Docker (từ 1.69GB xuống < 100KB)
+node_modules
+.next
+.git
+.github
+out
+build
+scraped_data.json
+*.log
+*.tsbuildinfo
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+cv_templates_output
+python-ml-service/__pycache__

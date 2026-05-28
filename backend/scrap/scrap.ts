@@ -108,8 +108,8 @@ const pickCleanValue = (values: Array<string | undefined>, validator?: (v?: stri
   return 'N/A';
 };
 
-export async function scrapeJoboko() {
-  console.log('Khởi chạy trình duyệt (Headless mode: true)...');
+export async function scrapeJoboko(maxPages = 5, limitJobs?: number) {
+  console.log(`Khởi chạy trình duyệt (Headless mode: true, maxPages: ${maxPages}, limitJobs: ${limitJobs ?? 'vô hạn'})...`);
   const browser: Browser = await chromium.launch({ headless: true });
   const page: Page = await browser.newPage();
 
@@ -139,7 +139,6 @@ export async function scrapeJoboko() {
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
 
     let allListJobs: any[] = [];
-    const maxPages = 5; // QUÉT 5 TRANG ĐẦU TIÊN MỖI LẦN CHẠY (KHOẢNG 100-150 TIN)
 
     for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
       console.log(`Đang quét danh sách việc làm tại Trang ${currentPage}...`);
@@ -299,11 +298,10 @@ export async function scrapeJoboko() {
       return true;
     });
 
-    console.log(`Tìm thấy ${listJobs.length} tin tuyển dụng từ JobOKO.`);
-
-    for (let i = 0; i < listJobs.length; i++) {
-      const listJob = listJobs[i];
-      console.log(`\n[${i + 1}/${listJobs.length}] Đang cào chi tiết: ${listJob.url}`);
+    const jobsToScrape = limitJobs ? listJobs.slice(0, limitJobs) : listJobs;
+    for (let i = 0; i < jobsToScrape.length; i++) {
+      const listJob = jobsToScrape[i];
+      console.log(`\n[${i + 1}/${jobsToScrape.length}] Đang cào chi tiết: ${listJob.url}`);
 
       const jobPage = await browser.newPage();
       await jobPage.addInitScript(`window.__name = (func, name) => func;`);
