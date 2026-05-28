@@ -6,6 +6,8 @@
 * [x] Verify Next.js build (`npm run build`)
 * [x] Launch development server (`npm run dev`)
 * [x] Launch chatbot backend (`uvicorn server:app --port 8000`)
+* [x] Index codebase with GitNexus and sync with Memory Bank
+* [x] Setup async scraper worker (Celery, Redis)
 
 ## Bug Log
 * **Turbopack build failed**: `Module not found: Can't resolve '@supabase/ssr'`.
