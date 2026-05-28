@@ -1,6 +1,10 @@
 import { MongoClient } from 'mongodb';
 
-const uri = process.env.MONGODB_URI || 'mongodb://admin:secret_password_123@localhost:27017';
+const uri = process.env.MONGODB_URI;
+
+if (!uri) {
+  throw new Error('❌ LỖI HỆ THỐNG: Thiếu cấu hình MONGODB_URI trong biến môi trường! Vui lòng định nghĩa trong file .env.local hoặc thiết lập biến hệ thống.');
+}
 const options = {};
 
 let client: MongoClient;

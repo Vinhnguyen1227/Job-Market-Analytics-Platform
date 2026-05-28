@@ -1,7 +1,11 @@
 import { MongoClient, Db } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:secret_password_123@localhost:27017/job_market_analytics';
+const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'job_market_analytics';
+
+if (!MONGODB_URI) {
+  throw new Error('❌ LỖI HỆ THỐNG: Thiếu cấu hình MONGODB_URI trong biến môi trường! Vui lòng định nghĩa trong file .env.local hoặc thiết lập biến hệ thống.');
+}
 
 
 // ─────────────────────────────────────────────────────────────
