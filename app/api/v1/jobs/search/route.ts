@@ -14,19 +14,31 @@ export async function GET(req: NextRequest) {
   const correlationId = req.headers.get('x-correlation-id') || `corr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // 2. Lấy IP của client để Rate Limiting
-  const ip = (req as any).ip || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+  // Ưu tiên sử dụng các header do hạ tầng/hosting cung cấp (x-real-ip, x-forwarded-for)
+  const xRealIp = req.headers.get('x-real-ip');
+  const xForwardedFor = req.headers.get('x-forwarded-for');
+  const headerIp =
+    (xRealIp && xRealIp.split(',')[0].trim()) ||
+    (xForwardedFor && xForwardedFor.split(',')[0].trim()) ||
+    null;
 
-  console.log(`[${correlationId}] Nhận request GET /api/v1/jobs/search từ IP: ${ip}`);
+  const ip = (req as any).ip || headerIp || null;
+
+  console.log(`[${correlationId}] Nhận request GET /api/v1/jobs/search từ IP: ${ip ?? 'UNKNOWN'}`);
 
   try {
-    // 3. Thực thi Rate Limiting qua Redis
-    const rateLimitResult = await checkRateLimit(ip, 50, 60);
-    if (!rateLimitResult.success) {
-      console.warn(`[${correlationId}] Rate limit exceeded cho IP: ${ip}. Số request hiện tại: ${rateLimitResult.count}`);
-      return NextResponse.json(
-        { error: 'Too Many Requests. Giới hạn 50 requests/phút.' },
-        { status: 429, headers: { 'x-correlation-id': correlationId } }
-      );
+    // 3. Thực thi Rate Limiting qua Redis (chỉ khi xác định được IP đáng tin cậy)
+    if (ip) {
+      const rateLimitResult = await checkRateLimit(ip, 50, 60);
+      if (!rateLimitResult.success) {
+        console.warn(`[${correlationId}] Rate limit exceeded cho IP: ${ip}. Số request hiện tại: ${rateLimitResult.count}`);
+        return NextResponse.json(
+          { error: 'Too Many Requests. Giới hạn 50 requests/phút.' },
+          { status: 429, headers: { 'x-correlation-id': correlationId } }
+        );
+      }
+    } else {
+      console.warn(`[${correlationId}] Không thể xác định IP client một cách đáng tin cậy. Bỏ qua rate limiting cho request này.`);
     }
 
     // 4. Kiểm tra JWT Blacklisting qua Redis (nếu request gửi kèm Auth Token)

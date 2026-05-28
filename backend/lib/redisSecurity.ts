@@ -1,4 +1,13 @@
 import { redis } from './redis';
+import { createHash } from 'crypto';
+
+/**
+ * Tạo mã Hash SHA-256 từ Token JWT để làm key lưu trữ trong Redis.
+ * Tránh việc lưu trữ toàn bộ JWT thô giúp tiết kiệm bộ nhớ Redis và bảo mật payload nhạy cảm.
+ */
+function getTokenHash(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 /**
  * Decode JWT payload để lấy thời gian hết hạn (claim 'exp')
@@ -78,7 +87,7 @@ export async function blacklistToken(token: string): Promise<void> {
       ttl = 3600;
     }
 
-    const key = `blacklist:${token}`;
+    const key = `blacklist:${getTokenHash(token)}`;
     await redis.set(key, 'revoked', 'EX', ttl);
     console.log(`[RedisSecurity] Đã đưa token vào Blacklist. TTL còn lại: ${ttl}s`);
   } catch (err) {
@@ -94,7 +103,7 @@ export async function blacklistToken(token: string): Promise<void> {
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
   try {
     if (!token) return false;
-    const key = `blacklist:${token}`;
+    const key = `blacklist:${getTokenHash(token)}`;
     const exists = await redis.exists(key);
     return exists === 1;
   } catch (err) {
