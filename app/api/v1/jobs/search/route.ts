@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@elastic/elasticsearch';
+import { checkRateLimit, isTokenBlacklisted } from '@/backend/lib/redisSecurity';
 
 const esClient = new Client({
   node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
@@ -9,7 +10,56 @@ const INDEX = 'jobs';
 
 // GET /api/v1/jobs/search
 export async function GET(req: NextRequest) {
+  // 1. Khởi tạo/nhận Correlation ID
+  const correlationId = req.headers.get('x-correlation-id') || `corr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // 2. Lấy IP của client để Rate Limiting
+  const ip = (req as any).ip || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+
+  console.log(`[${correlationId}] Nhận request GET /api/v1/jobs/search từ IP: ${ip}`);
+
   try {
+    // 3. Thực thi Rate Limiting qua Redis
+    const rateLimitResult = await checkRateLimit(ip, 50, 60);
+    if (!rateLimitResult.success) {
+      console.warn(`[${correlationId}] Rate limit exceeded cho IP: ${ip}. Số request hiện tại: ${rateLimitResult.count}`);
+      return NextResponse.json(
+        { error: 'Too Many Requests. Giới hạn 50 requests/phút.' },
+        { status: 429, headers: { 'x-correlation-id': correlationId } }
+      );
+    }
+
+    // 4. Kiểm tra JWT Blacklisting qua Redis (nếu request gửi kèm Auth Token)
+    let token = '';
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+    
+    if (!token) {
+      const allCookies = req.cookies.getAll();
+      const sbAuthCookie = allCookies.find(c => c.name.includes('-auth-token'));
+      if (sbAuthCookie) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(sbAuthCookie.value));
+          token = parsed?.access_token || '';
+        } catch {
+          token = sbAuthCookie.value;
+        }
+      }
+    }
+
+    if (token) {
+      const isBlacklisted = await isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        console.warn(`[${correlationId}] Request bị chặn do Token nằm trong Blacklist.`);
+        return NextResponse.json(
+          { error: 'Unauthorized. Token đã bị thu hồi (đã đăng xuất).' },
+          { status: 401, headers: { 'x-correlation-id': correlationId } }
+        );
+      }
+    }
+
     const { searchParams } = req.nextUrl;
     const keyword       = searchParams.get('keyword')?.trim() || '';
     const locations     = searchParams.getAll('locations');
@@ -47,6 +97,7 @@ export async function GET(req: NextRequest) {
     if (salaryBuckets.length) filter.push({ terms: { salaryBuckets: salaryBuckets } });
 
     // ─── Execute Search ───────────────────────────────────────────────────────
+    console.log(`[${correlationId}] Đang tìm kiếm trên Elasticsearch với index: ${INDEX}`);
     const result = await esClient.search({
       index: INDEX,
       from,
@@ -71,12 +122,20 @@ export async function GET(req: NextRequest) {
     const jobs       = hits.map((h: any) => h._source?.raw_data ?? h._source);
     const totalPages = Math.ceil(total / limit) || 1;
 
+    console.log(`[${correlationId}] Tìm thấy ${total} kết quả. Trả về trang ${page}/${totalPages}`);
+
     return NextResponse.json({ jobs, total, page, totalPages }, {
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 
+        'Cache-Control': 'no-store',
+        'x-correlation-id': correlationId
+      },
     });
 
   } catch (err: any) {
-    console.error('[/api/v1/jobs/search] Error:', err?.message ?? err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error(`[${correlationId}] [/api/v1/jobs/search] Lỗi hệ thống:`, err?.message ?? err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { 
+      status: 500,
+      headers: { 'x-correlation-id': correlationId }
+    });
   }
 }

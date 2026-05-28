@@ -59,6 +59,21 @@ export async function signup(prevState: any, formData: FormData) {
 
 export async function logout() {
   const supabase = await createClient()
+  
+  try {
+    // Lấy session hiện tại để lấy access_token
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    
+    if (token) {
+      // Import động để tránh các vấn đề import vòng lặp hoặc import lỗi môi trường edge
+      const { blacklistToken } = await import('@/backend/lib/redisSecurity')
+      await blacklistToken(token)
+    }
+  } catch (err) {
+    console.error('[Logout Action] Lỗi khi đưa token vào blacklist:', err)
+  }
+
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/login')
