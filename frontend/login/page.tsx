@@ -9,7 +9,7 @@ import { login } from '@/backend/auth/actions';
 const initialState = { error: null } as { error: string | null };
 
 export default function LoginPage() {
-  const [state, formAction, isPending] = useActionState(login, initialState);
+  const [state, formAction, isPending] = useActionState(login as any, initialState);
 
   return (
     <div className="min-h-screen font-sans bg-[#f4f2ee] flex flex-col relative overflow-hidden">

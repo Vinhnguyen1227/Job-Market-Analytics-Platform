@@ -59,7 +59,94 @@ export async function signup(prevState: any, formData: FormData) {
 
 export async function logout() {
   const supabase = await createClient()
+  
+  try {
+    // Lấy session hiện tại để lấy access_token
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    
+    if (token) {
+      // Import động để tránh các vấn đề import vòng lặp hoặc import lỗi môi trường edge
+      const { blacklistToken } = await import('@/backend/lib/redisSecurity')
+      await blacklistToken(token)
+    }
+  } catch (err) {
+    console.error('[Logout Action] Lỗi khi đưa token vào blacklist:', err)
+  }
+
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/login')
+}
+
+export async function updateProfile(firstName: string, lastName: string, country: string, city: string) {
+  const supabase = await createClient()
+  
+  const fullName = `${firstName} ${lastName}`.trim()
+
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      full_name: fullName,
+      country,
+      city
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function updateExperiences(experiences: any[]) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      experiences
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function updateEducations(educations: any[]) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      educations
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
+}
+
+export async function updateSkills(skills: any[]) {
+  const supabase = await createClient()
+  
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      skills
+    }
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath('/profile')
+  return { success: true }
 }

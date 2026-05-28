@@ -7,3 +7,4 @@ export default async function JobSearch() {
 
   return <JobSearchPage user={user} />;
 }
+

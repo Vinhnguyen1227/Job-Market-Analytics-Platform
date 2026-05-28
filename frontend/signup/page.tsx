@@ -9,7 +9,7 @@ import { signup } from '@/backend/auth/actions';
 const initialState = { error: null, success: null } as { error: string | null, success: string | null };
 
 export default function SignUpPage() {
-  const [state, formAction, isPending] = useActionState(signup, initialState);
+  const [state, formAction, isPending] = useActionState(signup as any, initialState);
 
   return (
     <div className="min-h-screen font-sans bg-[#f4f2ee] flex flex-col relative overflow-hidden">
