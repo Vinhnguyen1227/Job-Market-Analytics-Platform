@@ -108,7 +108,7 @@ const pickCleanValue = (values: Array<string | undefined>, validator?: (v?: stri
   return 'N/A';
 };
 
-export async function scrapeJoboko(maxPages = 3, limitJobs?: number) {
+export async function scrapeJoboko(maxPages = 1, limitJobs?: number) {
   console.log(`Khởi chạy trình duyệt (Headless mode: true, maxPages: ${maxPages}, limitJobs: ${limitJobs ?? 'vô hạn'})...`);
   const browser: Browser = await chromium.launch({ headless: true });
   const page: Page = await browser.newPage();
@@ -137,6 +137,8 @@ export async function scrapeJoboko(maxPages = 3, limitJobs?: number) {
     console.log(`Truy cập trang chủ tuyển dụng: ${startUrl}`);
     await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
+    await delay(8000); // Chờ render đầy đủ các tin tuyển dụng động
+
 
     let allListJobs: any[] = [];
 
@@ -285,7 +287,8 @@ export async function scrapeJoboko(maxPages = 3, limitJobs?: number) {
           console.log(`Không tìm thấy nút sang trang tiếp theo ở Trang ${currentPage}. Ngưng quét list job.`);
           break;
         }
-        await page.waitForTimeout(4000); // Chờ trang mới load
+        await delay(8000); // Chờ trang mới load
+
       }
     } // kết thúc for loop duyệt trang
 
