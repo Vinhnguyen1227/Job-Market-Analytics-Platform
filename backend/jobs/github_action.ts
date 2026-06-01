@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { scrapeJoboko, checkJobExists, checkJobExistsWithPage } from '../scrap/scrap';
+import { scrapeJoboko, checkJobExists } from '../scrap/scrap';
 import { scrapeTopCV } from '../scrap/scrap_topcv';
-import { chromium } from 'playwright';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
@@ -150,45 +149,25 @@ async function runAllJobs() {
   // 3. KIỂM TRA TIN N/A
   // -----------------------------------------------------
   console.log('\n[3/3] Kiểm tra độ sống sót của các tin N/A...');
-  // Chỉ tải các tin có hạn nộp là 'N/A' trực tiếp từ DB bằng toán tử JSONB và giới hạn tối đa 30 tin
-  const { data: naJobs, error: errNa } = await supabase
-    .from('jobs')
-    .select('url')
-    .eq('thong_tin_tuyen_dung->>het_han_nop', 'N/A')
-    .limit(30);
+  const { data: naJobs, error: errNa } = await supabase.from('jobs').select('url, thong_tin_tuyen_dung');
   
   if (errNa) {
     console.error('Lỗi khi fetch jobs N/A:', errNa);
-  } else if (naJobs && naJobs.length > 0) {
-    console.log(`Phát hiện ${naJobs.length} tin N/A cần kiểm tra. Đang khởi chạy trình duyệt ẩn danh...`);
-    const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    // Giả lập User-Agent của người dùng thực để tránh bị chặn
-    await page.setExtraHTTPHeaders({
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-    });
-    await page.addInitScript(`window.__name = (func, name) => func;`);
-    
+  } else {
     const deadUrls: string[] = [];
     
-    for (let i = 0; i < naJobs.length; i++) {
-      const j = naJobs[i];
-      console.log(`[N/A Check ${i + 1}/${naJobs.length}] Kiểm tra URL: ${j.url}`);
-      
-      const exists = await checkJobExistsWithPage(page, j.url);
-      if (!exists) {
-        console.log(`-> Link đã chết hoặc hết hạn: ${j.url}`);
-        deadUrls.push(j.url);
-      }
-      
-      // Nghỉ nhẹ 2 giây để tránh làm quá tải máy chủ đích
-      if (i < naJobs.length - 1) {
-        await new Promise(r => setTimeout(r, 2000));
+    for (const j of naJobs || []) {
+      const hetHan = j.thong_tin_tuyen_dung?.het_han_nop;
+      if (hetHan === 'N/A') {
+        console.log(`Kiểm tra URL: ${j.url}`);
+        const exists = await checkJobExists(j.url);
+        
+        if (!exists) {
+          console.log(`-> Link đã chết: ${j.url}`);
+          deadUrls.push(j.url);
+        }
       }
     }
-    
-    await browser.close();
     
     if (deadUrls.length > 0) {
       console.log(`Phát hiện ${deadUrls.length} tin N/A đã chết. Đang tiến hành xóa hàng loạt theo lô...`);
@@ -213,8 +192,6 @@ async function runAllJobs() {
     } else {
       console.log('Không phát hiện tin N/A nào bị chết.');
     }
-  } else {
-    console.log('Không có tin N/A nào cần kiểm tra.');
   }
 
   console.log('\n=== HOÀN TẤT GITHUB ACTIONS ===');
