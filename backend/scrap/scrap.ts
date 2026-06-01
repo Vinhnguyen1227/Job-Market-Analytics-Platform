@@ -526,6 +526,33 @@ export async function checkJobExists(url: string): Promise<boolean> {
   }
 }
 
+export async function checkJobExistsWithPage(page: Page, url: string): Promise<boolean> {
+  try {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Nếu trả về mã lỗi 4xx, 5xx (như 404)
+    if (!response || !response.ok()) return false;
+    
+    // Kiểm tra thông điệp trên trang xem tin có bị gỡ/hết hạn không
+    const isExpired = await page.evaluate(() => {
+      const text = document.body.innerText.toLowerCase();
+      return text.includes('không tìm thấy việc làm') || 
+             text.includes('tin tuyển dụng đã hết hạn') ||
+             text.includes('tin tuyển dụng này đã đóng') ||
+             text.includes('việc làm này không còn tồn tại') ||
+             text.includes('dừng nhận hồ sơ') ||
+             text.includes('ngừng nhận hồ sơ') ||
+             text.includes('đã đóng ứng tuyển');
+    });
+    if (isExpired) return false;
+    
+    return true;
+  } catch (err) {
+    // Lỗi mạng hoặc bị timeout (có thể link die)
+    return false;
+  }
+}
+
+
 // Giữ lại khả năng chạy trực tiếp file này (nếu gọi bằng ts-node)
 if (require.main === module) {
   scrapeJoboko().then(results => {
