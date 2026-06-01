@@ -16,7 +16,7 @@ export async function scrapeTopCV(maxPages = 1, limitJobs?: number): Promise<any
   console.log(`=== BẮT ĐẦU CÀO DỮ LIỆU TỪ TOPCV (Số trang tối đa: ${maxPages}, Giới hạn tin: ${limitJobs ?? 'Vô hạn'}) ===`);
   
   // Chạy headless: true để phù hợp với môi trường CI/CD GitHub Actions
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const browser = await chromium.launch({ headless: false, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
 
   // Set User-Agent giả lập trình duyệt người dùng thật
