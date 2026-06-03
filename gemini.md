@@ -55,5 +55,5 @@ Sẽ containerize thêm các service:
 
 ## Rules for Gemini Models (Coding Agents)
 1. **Handle the coding process.** Work according to plans.
-2. **Always output a `.md` walkthrough** (`walkthrough.md`) after working according to a plan, guiding the reviewer agent (Gemini 3.1 Pro).
+2. **Always output a `.md` walkthrough** (`walkthrough.md`) after working according to a plan, guiding the reviewer agent (Gemini 3.5 Pro).
 

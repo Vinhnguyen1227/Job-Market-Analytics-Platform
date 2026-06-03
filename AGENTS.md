@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Job-Market-Analytics-Platform** (2620 symbols, 4461 relationships, 123 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Job-Market-Analytics-Platform** (1533 symbols, 2276 relationships, 75 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -55,4 +55,4 @@ This project is indexed by GitNexus as **Job-Market-Analytics-Platform** (2620 s
 
 ## Rules for Gemini Models (Coding Agents)
 1. **Handle the coding process.** Work according to plans.
-2. **Always output a `.md` walkthrough** (`walkthrough.md`) after working according to a plan, guiding the reviewer agent (Gemini 3.1 Pro).
+2. **Always output a `.md` walkthrough** (`walkthrough.md`) after working according to a plan, guiding the reviewer agent (Gemini 3.5 Pro).
