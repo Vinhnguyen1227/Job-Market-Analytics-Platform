@@ -12,6 +12,8 @@ jobs:
   scrape_and_normalize:
     runs-on: ubuntu-latest
     timeout-minutes: 120  # Tối đa 2 tiếng
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       # ── PIPELINE FLOW ──────────────────────────────────────────────
