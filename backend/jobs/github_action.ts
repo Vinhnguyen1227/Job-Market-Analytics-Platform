@@ -23,7 +23,7 @@ async function runAllJobs() {
   // 1. CÀO DỮ LIỆU MỚI
   // -----------------------------------------------------
   console.log('\n[1/3] Đang cào dữ liệu mới từ JobOKO...');
-  const jobokoResults = await scrapeJoboko(3); // Cào 3 trang đầu tiên của JobOKO
+  const jobokoResults = await scrapeJoboko(2); // Cào 2 trang đầu tiên của JobOKO
 
   console.log('\n[1.5/3] Đang cào dữ liệu mới từ TopCV...');
   let topcvResults: any[] = [];
