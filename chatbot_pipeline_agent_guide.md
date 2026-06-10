@@ -2,7 +2,7 @@
 
 > **Audience**: Gemini code-pounder agents (backend + frontend) and Claude reviewer agents.
 > **Author role**: Claude research/plan caveman. Me no write code. Me draw map only.
-> **Status**: DRAFT — waits for big chief (user) to nod head before any pounding begins.
+> **Status**: APPROVED by big chief (2026-06-10). 4 open questions answered (see §8). Gemini pounder may begin Step 1.
 > **Caveman law**: All other agent talk shall sound like cave talk. No fancy word.
 
 ---
@@ -411,15 +411,113 @@ Endpoints:
 
 ---
 
-## 8. Open Questions for Big Chief (User)
+## 8. Decisions from Big Chief (LOCKED — 2026-06-10)
 
-1. Ollama on host or compose service? (affects `OLLAMA_HOST`)
-2. Delete root-level `adapter_model.safetensors` and use only `chatbot/models/qlora-*/final_adapter`?
-3. SSE streaming now or later? MVP can stay JSON.
-4. FastAPI auth — rely on Next BFF or also enforce token in FastAPI?
+| # | Question | Big chief say | What this change in map |
+|---|----------|---------------|--------------------------|
+| 1 | Where Ollama run? | **HOST machine** (NOT compose service) | `OLLAMA_HOST=http://host.docker.internal:11434` for `chatbot-api` + `celery-worker`. Do NOT add `ollama` service to `docker-compose.yml`. Step 1 service list drops to 6 containers (3 existing + chatbot-api + celery-worker + qdrant). On Linux host, add `extra_hosts: ["host.docker.internal:host-gateway"]` to both backend containers. |
+| 2 | Delete root `adapter_model.safetensors`? | **YES — delete it.** | Each `Modelfile.careerintel-*` must point `ADAPTER` at its own `chatbot/models/qlora-qwen25-1-5b-*/final_adapter/` directory. Pounder must `git rm adapter_model.safetensors` AND `rm adapter_config.json` at project root, then fix `Modelfile.careerintel-tool-call` (currently points at `adapter_model.safetensors`). |
+| 3 | SSE streaming now? | **NO — JSON only for MVP.** | `adapter_manager.py` exposes only `generate()` (no `generate_stream`). `server.py` `/api/chat` returns plain JSON. Frontend polling stays 2s. SSE punted to v2. |
+| 4 | Auth inside FastAPI? | **NO — trust Next.js BFF.** | FastAPI binds to `127.0.0.1:8000` on host network (or to docker internal network only). No JWT/Supabase check inside `server.py`. **Critical**: do NOT expose port 8000 to public internet — only `next-app` shall talk to it. In `docker-compose.yml`, drop `ports: - "8000:8000"` from `chatbot-api`; use `expose: - "8000"` so only sibling containers reach it. |
 
-Big chief answer → pounder green light → coding begins. Until then, stones rest in pile.
+### Locked Stack Diagram
+
+```
+┌─ HOST machine ─────────────────────────────────────────────┐
+│  ollama serve  (port 11434, careerintel-* models loaded)   │
+│                                                            │
+│  ┌─ docker compose network ──────────────────────────────┐ │
+│  │  next-app (3000, PUBLIC) ──► chatbot-api (8000, INTERNAL) │
+│  │                                  │                    │ │
+│  │                                  ├──► redis           │ │
+│  │                                  ├──► qdrant          │ │
+│  │                                  ├──► elasticsearch   │ │
+│  │                                  └──► celery-worker   │ │
+│  │                                         │              │ │
+│  │  All ──► host.docker.internal:11434 ◄───┘ (Ollama)    │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Step-1 docker-compose addendum (final shape)
+
+```yaml
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: job-market-qdrant
+    ports: ["6333:6333"]
+    volumes: ["qdrant_data:/qdrant/storage"]
+    restart: unless-stopped
+
+  chatbot-api:
+    build:
+      context: .
+      dockerfile: backend/chatbot/Dockerfile
+    container_name: job-market-chatbot-api
+    expose: ["8000"]                     # internal only — Next BFF talks to it
+    env_file: [.env.docker]
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - MODEL_TOOL_CALL=careerintel-tool-call
+      - MODEL_HR_COACH=careerintel-hr-coach
+      - MODEL_STRUCTURED_GEN=careerintel-structured-gen
+    extra_hosts: ["host.docker.internal:host-gateway"]   # Linux compat
+    depends_on:
+      redis: {condition: service_healthy}
+      qdrant: {condition: service_started}
+      elasticsearch: {condition: service_healthy}
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: backend/chatbot/Dockerfile
+    container_name: job-market-celery
+    command: celery -A celery_app worker -l info -Q ml
+    env_file: [.env.docker]
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - MODEL_HR_COACH=careerintel-hr-coach
+      - MODEL_STRUCTURED_GEN=careerintel-structured-gen
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on: [redis, qdrant]
+    restart: unless-stopped
+```
+
+Also bump `next-app` env: `CHATBOT_BACKEND_URL=http://chatbot-api:8000`.
+
+Volumes block adds: `qdrant_data:`.
+
+### Pre-flight Ollama on host (Windows)
+
+```powershell
+# One-time
+winget install Ollama.Ollama       # or download installer
+ollama serve                       # leave running in own terminal
+
+# Build the 3 adapters (after §1 trap-2 cleanup)
+ollama pull qwen2.5:1.5b
+ollama create careerintel-tool-call       -f .\Modelfile.careerintel-tool-call
+ollama create careerintel-hr-coach        -f .\Modelfile.careerintel-hr-coach
+ollama create careerintel-structured-gen  -f .\Modelfile.careerintel-structured-gen
+ollama list   # must show all 3
+```
+
+> **Trap re-stated**: Ollama on Windows binds to `127.0.0.1` by default. To accept connections from `host.docker.internal`, set env var `OLLAMA_HOST=0.0.0.0:11434` BEFORE `ollama serve`, OR run `setx OLLAMA_HOST "0.0.0.0:11434"` and restart the Ollama tray app. Without this, containers will get `connection refused`.
+
+### Frontend polling — keep but extend
+
+Because no SSE, the 2s × 60 = 120s polling ceiling in `frontend/ai assistant/page.tsx` is tight for Phase 3 (PhoBERT NER + LLM normalization). Pounder shall:
+- Bump loop in `pollJobStatus` from `attempts < 60` to `attempts < 150` (5 min hard ceiling).
+- After attempt 30 (≈1 min), swap placeholder text to `"⏳ Đang trích xuất CV — bước này có thể mất tới 3 phút..."` to keep user calm.
 
 ---
 
-*End of guide. Me Claude. Me only draw map. Me wait for big chief stamp.*
+*End of guide. Big chief stamp received. Gemini pounder begin Step 1.*
+
+

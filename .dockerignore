@@ -1,8 +1,10 @@
-# Loại bỏ các thư mục nặng để tăng tốc truyền tải Context sang Docker (từ 1.69GB xuống < 100KB)
+# Loại bỏ các thư mục nặng để tăng tốc truyền tải Context sang Docker.
 node_modules
 .next
 .git
 .github
+.gitnexus
+.venv
 out
 build
 scraped_data.json
@@ -13,4 +15,12 @@ scraped_data.json
 .env.test.local
 .env.production.local
 cv_templates_output
-python-ml-service/__pycache__
+
+# Python bytecode anywhere
+**/__pycache__
+*.pyc
+*.pyo
+
+# Old root adapter blobs (now live under chatbot/models/)
+adapter_model.safetensors
+adapter_config.json
