@@ -4,7 +4,6 @@ import re
 import time
 from google import genai
 from google.genai import types
-from google.api_core.exceptions import ResourceExhausted
 from typing import List
 from dotenv import load_dotenv
 
@@ -36,10 +35,9 @@ def call_gemini_with_backoff(prompt: str, config: types.GenerateContentConfig) -
             # Sleep 1s sau mỗi lần gọi thành công để throttle (giữ dưới 60 req/phút)
             time.sleep(1)
             return response.text
-        except (ResourceExhausted, Exception) as e:
+        except Exception as e:
             error_str = str(e)
             is_rate_limit = (
-                isinstance(e, ResourceExhausted) or 
                 '429' in error_str or 
                 'RESOURCE_EXHAUSTED' in error_str or
                 '503' in error_str
