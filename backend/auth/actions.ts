@@ -19,7 +19,7 @@ export async function login(prevState: any, formData: FormData) {
   })
 
   if (!parsed.success) {
-    return { error: parsed.error.errors[0].message }
+    return { error: parsed.error.issues[0].message }
   }
 
   const { email, password } = parsed.data
@@ -47,7 +47,7 @@ export async function signup(prevState: any, formData: FormData) {
   })
 
   if (!parsed.success) {
-    return { error: parsed.error.errors[0].message, success: null }
+    return { error: parsed.error.issues[0].message, success: null }
   }
 
   const { email, password, name } = parsed.data

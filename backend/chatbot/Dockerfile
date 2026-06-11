@@ -6,12 +6,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-vie \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/chatbot/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
 # Install pipeline dependencies
 COPY python-ml-service/requirements.txt ./pipeline_reqs.txt

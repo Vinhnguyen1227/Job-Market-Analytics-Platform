@@ -1,4 +1,4 @@
 FROM qwen2.5:1.5b
-ADAPTER chatbot/models/qlora-qwen25-1-5b-tool-call/final_adapter/
+ADAPTER D:\Job-Market-Analytics-Platform\chatbot\models\qlora-qwen25-1-5b-tool-call\adapter.gguf
 PARAMETER temperature 0.3
 PARAMETER num_ctx 4096

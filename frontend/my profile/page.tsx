@@ -66,7 +66,7 @@ export default function MyProfile({ user }: { user?: any }) {
       const res = await fetch('/api/v1/cv/upload', { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok) { setCvError(data.error || 'Upload thất bại'); return; }
-      setCvFile({ id: '', user_id: '', file_name: data.fileName, file_size: data.fileSize, file_type: data.fileType, uploaded_at: data.uploadedAt || new Date().toISOString(), signed_url: data.signedUrl });
+      setCvFile({ id: '', user_id: '', file_name: data.fileName, file_size: data.fileSize, file_type: data.fileType, file_path: data.filePath || '', uploaded_at: data.uploadedAt || new Date().toISOString(), signed_url: data.signedUrl });
     } catch {
       setCvError('Lỗi kết nối, vui lòng thử lại');
     } finally {
@@ -450,7 +450,7 @@ export default function MyProfile({ user }: { user?: any }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] font-semibold text-slate-800 truncate">{cvFile.file_name}</p>
                     <p className="text-[12px] text-gray-400 mt-0.5">
-                      {formatFileSize(cvFile.file_size)} · Cập nhật {new Date(cvFile.uploaded_at).toLocaleDateString('vi-VN')}
+                      {formatFileSize(cvFile.file_size || 0)} · Cập nhật {new Date(cvFile.uploaded_at).toLocaleDateString('vi-VN')}
                     </p>
                   </div>
 

@@ -38,11 +38,11 @@ interface Chat {
 }
 
 const SAMPLE_CHATS: Chat[] = [
-  { id: '1', title: 'PhÃƒÂ¢n tÃƒÂ­ch xu hÃ†Â°Ã¡Â»â€ºng tuyÃ¡Â»Æ’n dÃ¡Â»Â¥ng IT', messages: [] },
-  { id: '2', title: 'TÃ†Â° vÃ¡ÂºÂ¥n lÃ¡Â»â„¢ trÃƒÂ¬nh nghÃ¡Â»Â nghiÃ¡Â»â€¡p', messages: [] },
-  { id: '3', title: 'So sÃƒÂ¡nh mÃ¡Â»Â©c lÃ†Â°Ã†Â¡ng ngÃƒÂ nh Data', messages: [] },
-  { id: '4', title: 'KÃ¡Â»Â¹ nÃ„Æ’ng cÃ¡ÂºÂ§n thiÃ¡ÂºÂ¿t cho Product Manager', messages: [] },
-  { id: '5', title: 'Top cÃƒÂ´ng ty cÃƒÂ´ng nghÃ¡Â»â€¡ tÃ¡ÂºÂ¡i HÃƒÂ  NÃ¡Â»â„¢i', messages: [] },
+  { id: '1', title: 'Phân tích xu hướng tuyển dụng IT', messages: [] },
+  { id: '2', title: 'Tư vấn lộ trình nghề nghiệp', messages: [] },
+  { id: '3', title: 'So sánh mức lương ngành Data', messages: [] },
+  { id: '4', title: 'Kỹ năng cần thiết cho Product Manager', messages: [] },
+  { id: '5', title: 'Top công ty công nghệ tại Hà Nội', messages: [] },
 ];
 
 export default function AIAssistantPage({ user }: { user?: any }) {
@@ -105,7 +105,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     const placeholderMsg: Message = {
       id: Date.now().toString(),
       role: 'system',
-      content: 'Ã¢ÂÂ³ Ã„Âang xÃ¡Â»Â­ lÃƒÂ½ yÃƒÂªu cÃ¡ÂºÂ§u...',
+      content: '⏳ Đang xử lý yêu cầu...',
     };
     
     setMessages([...baseMessages, placeholderMsg]);
@@ -117,7 +117,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           const newMsgs = [...prev];
           const lastMsg = newMsgs[newMsgs.length - 1];
           if (lastMsg && lastMsg.role === 'system') {
-            lastMsg.content = 'Ã¢ÂÂ³ Ã„Âang trÃƒÂ­ch xuÃ¡ÂºÂ¥t CV Ã¢â‚¬â€ bÃ†Â°Ã¡Â»â€ºc nÃƒÂ y cÃƒÂ³ thÃ¡Â»Æ’ mÃ¡ÂºÂ¥t tÃ¡Â»â€ºi 3 phÃƒÂºt...';
+            lastMsg.content = '⏳ Đang trích xuất CV — bước này có thể mất tới 3 phút...';
           }
           return newMsgs;
         });
@@ -126,7 +126,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
             const newMsgs = [...c.messages];
             const lastMsg = newMsgs[newMsgs.length - 1];
             if (lastMsg && lastMsg.role === 'system') {
-              lastMsg.content = 'Ã¢ÂÂ³ Ã„Âang trÃƒÂ­ch xuÃ¡ÂºÂ¥t CV Ã¢â‚¬â€ bÃ†Â°Ã¡Â»â€ºc nÃƒÂ y cÃƒÂ³ thÃ¡Â»Æ’ mÃ¡ÂºÂ¥t tÃ¡Â»â€ºi 3 phÃƒÂºt...';
+              lastMsg.content = '⏳ Đang trích xuất CV — bước này có thể mất tới 3 phút...';
             }
             return { ...c, messages: newMsgs };
           }
@@ -160,7 +160,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           const finalMsg: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: result.response || result.message || 'Ã¢Å“â€¦ HoÃƒÂ n tÃ¡ÂºÂ¥t',
+            content: result.response || result.message || '✅ Hoàn tất',
             taskType: result.task_type || (result.resume_id ? 'upload' : undefined),
             metadata: result.metadata,
           };
@@ -172,7 +172,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           const errorMsg: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `Ã¢ÂÅ’ LÃ¡Â»â€”i: ${statusData.error || 'XÃ¡Â»Â­ lÃƒÂ½ thÃ¡ÂºÂ¥t bÃ¡ÂºÂ¡i.'}`,
+            content: `❌ Lỗi: ${statusData.error || 'Xử lý thất bại.'}`,
           };
           setMessages([...baseMessages, errorMsg]);
           setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, errorMsg] } : c));
@@ -187,7 +187,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     const timeoutMsg: Message = {
       id: (Date.now() + 1).toString(),
       role: 'assistant',
-      content: 'Ã¢ÂÅ’ HÃ¡ÂºÂ¿t thÃ¡Â»Âi gian chÃ¡Â»Â xÃ¡Â»Â­ lÃƒÂ½ tÃ¡Â»Â« server. Vui lÃƒÂ²ng thÃ¡Â»Â­ lÃ¡ÂºÂ¡i.',
+      content: '❌ Hết thời gian chờ xử lý từ server. Vui lòng thử lại.',
     };
     setMessages([...baseMessages, timeoutMsg]);
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, timeoutMsg] } : c));
@@ -250,7 +250,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.response || 'Xin lÃ¡Â»â€”i, tÃƒÂ´i khÃƒÂ´ng thÃ¡Â»Æ’ trÃ¡ÂºÂ£ lÃ¡Â»Âi lÃƒÂºc nÃƒÂ y.',
+          content: data.response || 'Xin lỗi, tôi không thể trả lời lúc này.',
           taskType: data.task_type,
           metadata: data.metadata,
         };
@@ -266,7 +266,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Ã¢ÂÅ’ KhÃƒÂ´ng thÃ¡Â»Æ’ kÃ¡ÂºÂ¿t nÃ¡Â»â€˜i Ã„â€˜Ã¡ÂºÂ¿n server. Vui lÃƒÂ²ng kiÃ¡Â»Æ’m tra lÃ¡ÂºÂ¡i kÃ¡ÂºÂ¿t nÃ¡Â»â€˜i.',
+        content: '❌ Không thể kết nối đến server. Vui lòng kiểm tra lại kết nối.',
       };
 
       const updatedMessages = [...newMessages, errorMsg];
@@ -292,7 +292,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     const uploadMsg: Message = {
       id: Date.now().toString(),
       role: 'system',
-      content: `Ã°Å¸â€œÂ¤ Ã„Âang tÃ¡ÂºÂ£i lÃƒÂªn vÃƒÂ  xÃ¡Â»Â­ lÃƒÂ½ **${file.name}**...`,
+      content: `📥 Đang tải lên và xử lý **${file.name}**...`,
     };
 
     // Create chat if needed
@@ -300,7 +300,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     if (!currentChatId) {
       const newChat: Chat = {
         id: Date.now().toString(),
-        title: `Ã°Å¸â€œâ€ž ${file.name}`,
+        title: `📄 ${file.name}`,
         messages: [],
       };
       setChats(prev => [newChat, ...prev]);
@@ -346,7 +346,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         const successMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.message || `Ã¢Å“â€¦ Ã„ÂÃƒÂ£ xÃ¡Â»Â­ lÃƒÂ½ thÃƒÂ nh cÃƒÂ´ng **${file.name}**`,
+          content: data.message || `✅ Đã xử lý thành công **${file.name}**`,
           taskType: 'upload',
         };
 
@@ -359,7 +359,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         const errorMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.message || `Ã¢ÂÅ’ LÃ¡Â»â€”i xÃ¡Â»Â­ lÃƒÂ½ file: ${data.error}`,
+          content: data.message || `❌ Lỗi xử lý file: ${data.error}`,
         };
 
         const updatedMessages = [...newMessages, errorMsg];
@@ -373,7 +373,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Ã¢ÂÅ’ KhÃƒÂ´ng thÃ¡Â»Æ’ kÃ¡ÂºÂ¿t nÃ¡Â»â€˜i Ã„â€˜Ã¡ÂºÂ¿n server Ã„â€˜Ã¡Â»Æ’ tÃ¡ÂºÂ£i file. Vui lÃƒÂ²ng thÃ¡Â»Â­ lÃ¡ÂºÂ¡i.',
+        content: '❌ Không thể kết nối đến server để tải file. Vui lòng thử lại.',
       };
 
       const updatedMessages = [...newMessages, errorMsg];
@@ -394,10 +394,10 @@ export default function AIAssistantPage({ user }: { user?: any }) {
   };
 
   const suggestions = [
-    'Xu hÃ†Â°Ã¡Â»â€ºng tuyÃ¡Â»Æ’n dÃ¡Â»Â¥ng IT 2025?',
-    'MÃ¡Â»Â©c lÃ†Â°Ã†Â¡ng trung bÃƒÂ¬nh Data Engineer?',
-    'KÃ¡Â»Â¹ nÃ„Æ’ng hot nhÃ¡ÂºÂ¥t hiÃ¡Â»â€¡n nay?',
-    'TÃ†Â° vÃ¡ÂºÂ¥n CV cho fresher?',
+    'Xu hướng tuyển dụng IT 2025?',
+    'Mức lương trung bình Data Engineer?',
+    'Kỹ năng hot nhất hiện nay?',
+    'Tư vấn CV cho fresher?',
   ];
 
   return (
@@ -591,7 +591,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 }
 
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ ChatInput Component Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// --- ChatInput Component ------------------------------------------------
 
 function ChatInput({
   value,
@@ -615,7 +615,7 @@ function ChatInput({
       <button
         onClick={onFileClick}
         disabled={isUploading}
-        title="TÃ¡ÂºÂ£i lÃƒÂªn CV (PDF/DOCX)"
+        title="Tải lên CV (PDF/DOCX)"
         className="text-gray-400 hover:text-blue-600 shrink-0 transition-colors disabled:opacity-50"
       >
         {isUploading ? (
@@ -629,7 +629,7 @@ function ChatInput({
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder={isUploading ? 'Ã„Âang xÃ¡Â»Â­ lÃƒÂ½ file...' : 'Ask anything'}
+        placeholder={isUploading ? 'Đang xử lý file...' : 'Ask anything'}
         disabled={isUploading}
         className="flex-1 bg-transparent outline-none resize-none text-sm text-slate-800 placeholder-gray-400 leading-6 max-h-40 overflow-y-auto disabled:opacity-50"
       />

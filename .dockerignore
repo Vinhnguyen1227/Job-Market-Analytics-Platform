@@ -24,3 +24,5 @@ cv_templates_output
 # Old root adapter blobs (now live under chatbot/models/)
 adapter_model.safetensors
 adapter_config.json
+chatbot/models
+llama*  
