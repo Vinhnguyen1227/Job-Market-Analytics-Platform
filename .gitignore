@@ -50,3 +50,11 @@ __pycache__/
 
 # models
 adapter_model.safetensors
+
+# local llama and model files
+Modelfile.careerintel-hr-coach.tmp
+adapter_config.json
+backend/chatbot/data/
+/llama.cpp-master/
+/llama.cpp/
+/llama.zip
