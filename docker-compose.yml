@@ -103,6 +103,8 @@ services:
       - MODEL_HR_COACH=careerintel-hr-coach
       - MODEL_STRUCTURED_GEN=careerintel-structured-gen
     extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - shared_tmp:/tmp
     depends_on:
       redis: {condition: service_healthy}
       qdrant: {condition: service_started}
@@ -123,6 +125,8 @@ services:
       - MODEL_HR_COACH=careerintel-hr-coach
       - MODEL_STRUCTURED_GEN=careerintel-structured-gen
     extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - shared_tmp:/tmp
     depends_on: [redis, qdrant]
     restart: unless-stopped
 
@@ -131,3 +135,4 @@ volumes:
   mongo_data:
   es_data:
   qdrant_data:
+  shared_tmp:

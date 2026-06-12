@@ -28,6 +28,7 @@ class AdapterManager:
         adapter: str,
         system: str,
         user: str,
+        history: list[dict] | None = None,
         **overrides,
     ) -> str:
         model_map = {
@@ -38,10 +39,12 @@ class AdapterManager:
         model = model_map[adapter]
         params = {**GEN_PARAMS[adapter], **overrides}
         fmt = params.pop("format", None)
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
+        
+        messages = [{"role": "system", "content": system}]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": user})
+        
         kwargs = {"model": model, "messages": messages, "options": params}
         if fmt:
             kwargs["format"] = fmt

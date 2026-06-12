@@ -134,6 +134,36 @@ class ElasticsearchClient:
             out.append(raw)
         return out
 
+    async def get_distinct_cities(self) -> list[str]:
+        body = {"size": 0, "aggs": {"distinct_cities": {"terms": {"field": "cities", "size": 1000}}}}
+        try:
+            res = await self._client.search(index=self.INDEX, body=body)
+            buckets = res.get("aggregations", {}).get("distinct_cities", {}).get("buckets", [])
+            return [b["key"] for b in buckets]
+        except Exception as e:
+            logger.error(f"ES aggs failed for cities: {e}")
+            return []
+
+    async def get_distinct_exp_buckets(self) -> list[str]:
+        body = {"size": 0, "aggs": {"distinct_exp": {"terms": {"field": "expBuckets", "size": 100}}}}
+        try:
+            res = await self._client.search(index=self.INDEX, body=body)
+            buckets = res.get("aggregations", {}).get("distinct_exp", {}).get("buckets", [])
+            return [b["key"] for b in buckets]
+        except Exception as e:
+            logger.error(f"ES aggs failed for expBuckets: {e}")
+            return []
+
+    async def get_distinct_work_types(self) -> list[str]:
+        body = {"size": 0, "aggs": {"distinct_work_types": {"terms": {"field": "workTypes", "size": 100}}}}
+        try:
+            res = await self._client.search(index=self.INDEX, body=body)
+            buckets = res.get("aggregations", {}).get("distinct_work_types", {}).get("buckets", [])
+            return [b["key"] for b in buckets]
+        except Exception as e:
+            logger.error(f"ES aggs failed for workTypes: {e}")
+            return []
+
 
 class ResumeQdrantClient:
     """Resume vector store reader.

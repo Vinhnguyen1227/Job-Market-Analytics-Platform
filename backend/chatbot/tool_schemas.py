@@ -9,32 +9,14 @@ slash command arguments.
 from __future__ import annotations
 
 from typing import List, Optional
+import logging
 
 from pydantic import BaseModel, Field, field_validator
 
+logger = logging.getLogger(__name__)
+
 
 # ── Valid Enum Values ────────────────────────────────
-
-VALID_CITIES = [
-    "Hà Nội", "Hồ Chí Minh", "Đà Nẵng", "Cần Thơ", "Hải Phòng",
-    "Bắc Ninh", "Bình Dương", "Đồng Nai", "Khánh Hòa", "Kiên Giang",
-    "Nghệ An", "Thanh Hóa", "Hải Dương", "Thái Nguyên", "Vĩnh Phúc",
-    "Thái Bình", "Long An", "Tiền Giang", "An Giang", "Bình Định",
-    "Lâm Đồng", "Đắk Lắk", "Quảng Ninh", "Quảng Nam", "Thừa Thiên Huế",
-    "Bà Rịa - Vũng Tàu", "Vũng Tàu", "Hưng Yên", "Nam Định", "Hà Nam",
-    "Ninh Bình", "Phú Thọ", "Yên Bái", "Lào Cai", "Sơn La", "Điện Biên",
-    "Lai Châu", "Hòa Bình", "Bắc Giang", "Lạng Sơn", "Tuyên Quang",
-    "Cao Bằng", "Bắc Kạn", "Hà Giang", "Quảng Bình", "Quảng Trị",
-    "Quảng Ngãi", "Bình Thuận", "Ninh Thuận", "Phú Yên", "Bình Phước",
-    "Tây Ninh", "Bến Tre", "Trà Vinh", "Vĩnh Long", "Đồng Tháp",
-    "Hậu Giang", "Sóc Trăng", "Bạc Liêu", "Cà Mau", "Gia Lai",
-    "Kon Tum", "Đắk Nông", "Toàn quốc", "Nước ngoài",
-]
-
-VALID_EXP_BUCKETS = ["Dưới 1 năm", "1 – 2 năm", "2 – 5 năm", "Trên 5 năm"]
-VALID_WORK_TYPES = [
-    "Toàn thời gian", "Bán thời gian", "Thực tập", "Thời vụ", "Làm tại nhà",
-]
 
 # Common location aliases → canonical name
 LOCATION_ALIASES = {
@@ -70,26 +52,35 @@ class SearchJobsParams(BaseModel):
         alias = LOCATION_ALIASES.get(v.lower().strip())
         if alias:
             return alias
-        if v not in VALID_CITIES:
+        from enum_cache import enum_cache
+        cities = enum_cache.cities
+        if not cities:
+            return v
+            
+        if v not in cities:
             # Fuzzy match: check if input is substring of a valid city
-            for city in VALID_CITIES:
+            for city in cities:
                 if v.lower() in city.lower():
                     return city
-            raise ValueError(f"Invalid location: {v}")
+            logger.warning(f"Unknown location passed through: {v}")
         return v
 
     @field_validator("experience")
     @classmethod
     def validate_exp(cls, v):
-        if v is not None and v not in VALID_EXP_BUCKETS:
-            raise ValueError(f"Invalid experience: {v}")
+        from enum_cache import enum_cache
+        exp_buckets = enum_cache.exp_buckets
+        if exp_buckets and v is not None and v not in exp_buckets:
+            logger.warning(f"Unknown experience passed through: {v}")
         return v
 
     @field_validator("work_type")
     @classmethod
     def validate_work_type(cls, v):
-        if v is not None and v not in VALID_WORK_TYPES:
-            raise ValueError(f"Invalid work type: {v}")
+        from enum_cache import enum_cache
+        work_types = enum_cache.work_types
+        if work_types and v is not None and v not in work_types:
+            logger.warning(f"Unknown work type passed through: {v}")
         return v
 
 

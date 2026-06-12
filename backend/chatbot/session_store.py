@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Session TTL: 24 hours
 SESSION_TTL = 86400
+MAX_HISTORY_TURNS = 10
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
@@ -52,6 +53,9 @@ class SessionStore:
 
     def _key(self, session_id: str) -> str:
         return f"session:{session_id}"
+
+    def _history_key(self, session_id: str) -> str:
+        return f"session:{session_id}:history"
 
     async def create(self, session_id: Optional[str] = None) -> str:
         """Create a new session or return existing.
@@ -143,8 +147,48 @@ class SessionStore:
         await self._redis.expire(self._key(session_id), SESSION_TTL)
         logger.info(f"Session {session_id}: resume stored (id={resume_id})")
 
+    async def get_history(self, session_id: str) -> list[dict]:
+        """Get conversation history.
+        
+        Returns:
+            List of dicts: [{'role': 'user', 'content': '...'}, ...]
+        """
+        await self.connect()
+        history_strs = await self._redis.lrange(self._history_key(session_id), 0, -1)
+        history = []
+        for h_str in history_strs:
+            try:
+                history.append(json.loads(h_str))
+            except json.JSONDecodeError:
+                continue
+        return history
+
+    async def append_history(self, session_id: str, role: str, content: str):
+        """Append message to history and trim to max window.
+        
+        Args:
+            session_id: Session ID
+            role: 'user' or 'assistant'
+            content: Message text
+        """
+        if not content:
+            return
+            
+        await self.connect()
+        h_key = self._history_key(session_id)
+        msg = json.dumps({"role": role, "content": content}, ensure_ascii=False)
+        
+        # Append to right, keep max MAX_HISTORY_TURNS * 2 messages
+        await self._redis.rpush(h_key, msg)
+        
+        max_msgs = MAX_HISTORY_TURNS * 2
+        # LTRIM keeps indices start to end. To keep last N items: LTRIM key -N -1
+        await self._redis.ltrim(h_key, -max_msgs, -1)
+        await self._redis.expire(h_key, SESSION_TTL)
+
     async def delete(self, session_id: str):
         """Delete a session."""
         await self.connect()
         await self._redis.delete(self._key(session_id))
+        await self._redis.delete(self._history_key(session_id))
         logger.info(f"Session {session_id}: deleted")

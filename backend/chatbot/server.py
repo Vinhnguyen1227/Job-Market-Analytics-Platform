@@ -43,8 +43,14 @@ job_tracker = JobTracker()
 async def lifespan(app: FastAPI):
     await session_store.connect()
     await job_tracker.connect()
+    from enum_cache import enum_cache
+    await enum_cache.get_valid_cities()
+    await enum_cache.get_valid_exp_buckets()
+    await enum_cache.get_valid_work_types()
+    enum_cache.start_refresh_task()
     logger.info("Chatbot API ready")
     yield
+    enum_cache.stop_refresh_task()
     await session_store.close()
     await job_tracker.close()
     try:
@@ -112,13 +118,14 @@ async def chat(req: ChatRequest, request: Request):
 
     session_id = await session_store.create(req.session_id)
     session_data = await session_store.get(session_id) or {}
+    history = await session_store.get_history(session_id)
 
     # 1) slash command?
     tc = slash_commands.maybe_handle(message)
     # 2) Adapter A
     if tc is None:
         try:
-            tc = await router_route(message, req.history or [])
+            tc = await router_route(message)
         except Exception as e:
             logger.exception("intent_router blew up")
             raise HTTPException(
@@ -128,13 +135,20 @@ async def chat(req: ChatRequest, request: Request):
 
     # 3) dispatch
     try:
-        result = await dispatch(tc, session_id, session_data, message)
+        result = await dispatch(tc, session_id, session_data, message, history)
     except Exception as e:
         logger.exception("tool_dispatcher blew up")
         raise HTTPException(
             status_code=500,
             detail=format_error("Lỗi khi chạy công cụ.", "dispatcher_failed", trace_id),
         ) from e
+
+    # 4) persist history (non-fatal if Redis hiccups)
+    try:
+        await session_store.append_history(session_id, "user", message)
+        await session_store.append_history(session_id, "assistant", result["response"])
+    except Exception:
+        logger.warning(f"Failed to persist history for session {session_id}, continuing")
 
     md = result.get("metadata", {}) or {}
     md["trace_id"] = trace_id

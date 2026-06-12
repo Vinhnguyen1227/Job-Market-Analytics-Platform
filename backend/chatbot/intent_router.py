@@ -5,7 +5,7 @@ the result, and falls back to `general_response` if it can't be parsed.
 
 History is intentionally NOT passed to Adapter A - the training set
 used single-turn prompts (see slm_orchestrator_api_pipeline_guide.md
-§13 Q3).
+§13 Q3). Do NOT add a history param to route().
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ async def _try_once(user_msg: str, temperature: float | None = None) -> ToolCall
         return None
 
 
-async def route(user_msg: str, history: list[dict] | None = None) -> ToolCallResult:
+async def route(user_msg: str) -> ToolCallResult:
     """Return a ToolCallResult, never raise.
 
     Strategy:
