@@ -208,8 +208,9 @@ export default function AIAssistantPage({ user }: { user?: any }) {
             metadata: result.metadata,
           };
           
-          setMessages([...baseMessages, finalMsg]);
-          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, finalMsg] } : c));
+          const cleanBase = baseMessages.filter(m => m.role !== 'system');
+          setMessages([...cleanBase, finalMsg]);
+          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...cleanBase, finalMsg] } : c));
           
           fetch(`/api/v1/chat/conversations/${chatId}/messages`, {
               method: 'POST',
@@ -232,8 +233,9 @@ export default function AIAssistantPage({ user }: { user?: any }) {
             role: 'assistant',
             content: `❌ Lỗi: ${statusData.error || 'Xử lý thất bại.'}`,
           };
-          setMessages([...baseMessages, errorMsg]);
-          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, errorMsg] } : c));
+          const cleanBase = baseMessages.filter(m => m.role !== 'system');
+          setMessages([...cleanBase, errorMsg]);
+          setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...cleanBase, errorMsg] } : c));
           return;
         }
       } catch (error) {
@@ -247,8 +249,9 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       role: 'assistant',
       content: '❌ Hết thời gian chờ xử lý từ server. Vui lòng thử lại.',
     };
-    setMessages([...baseMessages, timeoutMsg]);
-    setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, timeoutMsg] } : c));
+    const cleanBase = baseMessages.filter(m => m.role !== 'system');
+    setMessages([...cleanBase, timeoutMsg]);
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...cleanBase, timeoutMsg] } : c));
   };
 
   const handleSend = async () => {

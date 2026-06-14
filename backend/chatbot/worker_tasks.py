@@ -78,6 +78,11 @@ def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id
                 )
 
             await job_tracker.update_status(job_id, "COMPLETED", result=result)
+            
+            if session_id:
+                await session_store.append_history(
+                    session_id, "assistant", result["response"]
+                )
         except Exception as e:
             logger.exception(f"process_cv_task failed for job {job_id}")
             await job_tracker.update_status(job_id, "FAILED", error=str(e))
@@ -88,5 +93,15 @@ def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id
                     os.unlink(file_path)
             except Exception:
                 pass
+            
+            # Prevent "Event loop is closed" on subsequent tasks by 
+            # closing connections bound to this task's event loop.
+            try:
+                await session_store.close()
+                await job_tracker.close()
+                from mongo_client import mongo_client
+                await mongo_client.close()
+            except Exception as e:
+                logger.error(f"Error closing connections: {e}")
 
     asyncio.run(_run())

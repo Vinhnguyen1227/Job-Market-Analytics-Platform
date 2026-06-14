@@ -92,6 +92,33 @@ class ChatRequest(BaseModel):
     history: list[dict[str, Any]] = []
 
 
+# ── Helpers ─────────────────────────────────────────────────────────
+
+_AFFIRMATIVE_WORDS = {
+    "ok", "ok!", "okay", "yes", "y", "có", "co", "ừ", "uh", "ừm",
+    "đồng ý", "dong y", "được", "duoc", "rồi", "roi", "đánh giá",
+    "danh gia", "đi", "di", "sure", "yep", "yeah", "vâng", "vang",
+    "dạ", "da", "oke", "okie",
+}
+
+
+def _is_affirmative_reply(message: str) -> bool:
+    """True if the message is a short affirmative (≤4 words)."""
+    words = message.lower().strip().rstrip("!.?").split()
+    return len(words) <= 4 and any(w in _AFFIRMATIVE_WORDS for w in words)
+
+
+def _last_assistant_is_cv_prompt(history: list[dict] | None) -> bool:
+    """True if the last assistant message in history is the CV extraction prompt."""
+    if not history:
+        return False
+    for msg in reversed(history):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "")
+            return "trích xuất" in content.lower() and "đánh giá" in content.lower()
+    return False
+
+
 # ── Routes ─────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -155,6 +182,19 @@ async def chat(req: ChatRequest, request: Request):
                 status_code=422,
                 detail=format_error("Không phân loại được câu hỏi.", "router_failed", trace_id),
             ) from e
+
+    # 2b) Context-aware override: short affirmative after CV upload → assess_resume
+    #     Adapter A is single-turn and can't see history, so "ok"/"yes"/"có"
+    #     after "Bạn muốn mình đánh giá ngay không?" gets misrouted to general_response.
+    if (
+        tc.tool == "general_response"
+        and session_data.get("resume_id")
+        and _is_affirmative_reply(message)
+        and _last_assistant_is_cv_prompt(history)
+    ):
+        from tool_schemas import ToolCallResult as _TCR
+        tc = _TCR(tool="assess_resume", params={"focus_areas": ["overall"]})
+        logger.info(f"Override: general_response → assess_resume (affirmative after CV upload)")
 
     # 3) dispatch
     try:
