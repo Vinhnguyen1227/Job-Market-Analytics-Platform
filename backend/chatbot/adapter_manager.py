@@ -17,6 +17,7 @@ from adapter_config import (
     MODEL_TOOL_CALL,
     OLLAMA_HOST,
 )
+from adapter_prompts import CONVERSATION_SUMMARY_TEMPLATE
 
 
 class AdapterManager:
@@ -29,6 +30,7 @@ class AdapterManager:
         system: str,
         user: str,
         history: list[dict] | None = None,
+        conversation_summary: str | None = None,
         **overrides,
     ) -> str:
         model_map = {
@@ -41,6 +43,9 @@ class AdapterManager:
         fmt = params.pop("format", None)
         
         messages = [{"role": "system", "content": system}]
+        if conversation_summary:
+            messages.append({"role": "system", "content": CONVERSATION_SUMMARY_TEMPLATE.format(summary=conversation_summary)})
+            
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user})

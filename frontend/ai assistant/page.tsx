@@ -37,16 +37,8 @@ interface Chat {
   resumeName?: string;
 }
 
-const SAMPLE_CHATS: Chat[] = [
-  { id: '1', title: 'Phân tích xu hướng tuyển dụng IT', messages: [] },
-  { id: '2', title: 'Tư vấn lộ trình nghề nghiệp', messages: [] },
-  { id: '3', title: 'So sánh mức lương ngành Data', messages: [] },
-  { id: '4', title: 'Kỹ năng cần thiết cho Product Manager', messages: [] },
-  { id: '5', title: 'Top công ty công nghệ tại Hà Nội', messages: [] },
-];
-
 export default function AIAssistantPage({ user }: { user?: any }) {
-  const [chats, setChats] = useState<Chat[]>(SAMPLE_CHATS);
+  const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -69,6 +61,23 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/v1/chat/conversations?limit=20')
+      .then(res => res.json())
+      .then(data => {
+        if (data.conversations) {
+          setChats(data.conversations.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            messages: [],
+            sessionId: c.sessionId,
+          })));
+        }
+      })
+      .catch(err => console.error('Failed to load conversations:', err));
+  }, [user]);
+
   const handleNewChat = () => {
     setActiveChatId(null);
     setMessages([]);
@@ -78,16 +87,44 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     setResumeName(null);
   };
 
-  const handleSelectChat = (chatId: string) => {
+  const handleSelectChat = async (chatId: string) => {
     setActiveChatId(chatId);
-    const chat = chats.find(c => c.id === chatId);
-    setMessages(chat?.messages || []);
-    setSessionId(chat?.sessionId || null);
-    setResumeId(chat?.resumeId || null);
-    setResumeName(chat?.resumeName || null);
+    const cachedChat = chats.find(c => c.id === chatId);
+    setMessages(cachedChat?.messages || []);
+    setSessionId(cachedChat?.sessionId || null);
+    setResumeId(cachedChat?.resumeId || null);
+    setResumeName(cachedChat?.resumeName || null);
+
+    try {
+        const res = await fetch(`/api/v1/chat/conversations/${chatId}/messages`);
+        const data = await res.json();
+        if (data.messages) {
+            const msgs = data.messages.map((m: any) => ({
+                id: m.createdAt,
+                role: m.role,
+                content: m.content,
+                taskType: m.metadata?.task_type,
+            }));
+            setMessages(msgs);
+            setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: msgs } : c));
+        }
+        
+        if (cachedChat?.sessionId) {
+            const histRes = await fetch(`/api/v1/chat/session/${cachedChat.sessionId}`);
+            if (histRes.ok) {
+                const histData = await histRes.json();
+                if (histData.resume_id) {
+                    setResumeId(histData.resume_id);
+                    setResumeName(histData.resume_name);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load messages', err);
+    }
   };
 
-  const handleDeleteChat = (e: React.MouseEvent, chatId: string) => {
+  const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
     setChats(prev => prev.filter(c => c.id !== chatId));
     if (activeChatId === chatId) {
@@ -96,6 +133,12 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       setSessionId(null);
       setResumeId(null);
       setResumeName(null);
+    }
+    
+    try {
+        await fetch(`/api/v1/chat/conversations/${chatId}`, { method: 'DELETE' });
+    } catch (err) {
+        console.error('Failed to delete chat', err);
     }
   };
 
@@ -167,6 +210,21 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           
           setMessages([...baseMessages, finalMsg]);
           setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...baseMessages, finalMsg] } : c));
+          
+          fetch(`/api/v1/chat/conversations/${chatId}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ role: 'assistant', content: finalMsg.content, metadata: finalMsg.metadata })
+          }).catch(err => console.error("Failed to save assistant message", err));
+          
+          if (result.session_id) {
+            fetch(`/api/v1/chat/conversations/${chatId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: result.session_id })
+            }).catch(err => console.error("Failed to link session", err));
+          }
+          
           return;
         } else if (statusData.status === 'FAILED' || statusData.status === 'ERROR') {
           const errorMsg: Message = {
@@ -203,20 +261,47 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     setInputValue('');
     setIsTyping(true);
 
-    // Create or update chat
     let currentChatId = activeChatId;
     if (!currentChatId) {
-      const newChat: Chat = {
-        id: Date.now().toString(),
-        title: text.length > 40 ? text.slice(0, 40) + '...' : text,
-        messages: [],
-        sessionId: sessionId || undefined,
-        resumeId: resumeId || undefined,
-        resumeName: resumeName || undefined,
-      };
-      setChats(prev => [newChat, ...prev]);
-      setActiveChatId(newChat.id);
-      currentChatId = newChat.id;
+      try {
+        const createRes = await fetch('/api/v1/chat/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: { role: 'user', content: text } })
+        });
+        const createData = await createRes.json();
+        if (createData.conversation) {
+            currentChatId = createData.conversation.id;
+            const newChat: Chat = {
+              id: currentChatId!,
+              title: createData.conversation.title,
+              messages: [userMsg],
+              sessionId: sessionId || undefined,
+            };
+            setChats(prev => [newChat, ...prev]);
+            setActiveChatId(currentChatId);
+        } else {
+             throw new Error("Failed to create");
+        }
+      } catch (e) {
+          console.error("Create conversation failed", e);
+          const tempId = Date.now().toString();
+          currentChatId = tempId;
+          const newChat: Chat = {
+            id: tempId,
+            title: text.length > 40 ? text.slice(0, 40) + '...' : text,
+            messages: [userMsg],
+            sessionId: sessionId || undefined,
+          };
+          setChats(prev => [newChat, ...prev]);
+          setActiveChatId(tempId);
+      }
+    } else {
+        fetch(`/api/v1/chat/conversations/${currentChatId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'user', content: text })
+        }).catch(err => console.error("Failed to save user message", err));
     }
 
     try {
@@ -237,7 +322,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       const data = await response.json();
 
       if (data.job_id) {
-        pollJobStatus(data.job_id, currentChatId, newMessages);
+        pollJobStatus(data.job_id, currentChatId!, newMessages);
       } else {
         // Update session ID from backend
         if (data.session_id && !sessionId) {
@@ -260,6 +345,20 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         setChats(prev => prev.map(c =>
           c.id === currentChatId ? { ...c, messages: updatedMessages } : c
         ));
+
+        fetch(`/api/v1/chat/conversations/${currentChatId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'assistant', content: aiMsg.content, metadata: aiMsg.metadata })
+        }).catch(err => console.error("Failed to save assistant message", err));
+        
+        if (data.session_id) {
+          fetch(`/api/v1/chat/conversations/${currentChatId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId: data.session_id })
+          }).catch(err => console.error("Failed to link session", err));
+        }
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -295,17 +394,45 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       content: `📥 Đang tải lên và xử lý **${file.name}**...`,
     };
 
-    // Create chat if needed
     let currentChatId = activeChatId;
     if (!currentChatId) {
-      const newChat: Chat = {
-        id: Date.now().toString(),
-        title: `📄 ${file.name}`,
-        messages: [],
-      };
-      setChats(prev => [newChat, ...prev]);
-      setActiveChatId(newChat.id);
-      currentChatId = newChat.id;
+      try {
+        const createRes = await fetch('/api/v1/chat/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: { role: 'user', content: `Đã tải lên CV: ${file.name}` } })
+        });
+        const createData = await createRes.json();
+        if (createData.conversation) {
+            currentChatId = createData.conversation.id;
+            const newChat: Chat = {
+              id: currentChatId!,
+              title: `📄 ${file.name}`,
+              messages: [],
+            };
+            setChats(prev => [newChat, ...prev]);
+            setActiveChatId(currentChatId);
+        } else {
+             throw new Error("Failed to create");
+        }
+      } catch (e) {
+        console.error("Create conversation failed", e);
+        const tempId = Date.now().toString();
+        currentChatId = tempId;
+        const newChat: Chat = {
+          id: tempId,
+          title: `📄 ${file.name}`,
+          messages: [],
+        };
+        setChats(prev => [newChat, ...prev]);
+        setActiveChatId(tempId);
+      }
+    } else {
+        fetch(`/api/v1/chat/conversations/${currentChatId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'user', content: `Đã tải lên CV: ${file.name}` })
+        }).catch(err => console.error("Failed to save user upload message", err));
     }
 
     const newMessages = [...messages, uploadMsg];
@@ -326,7 +453,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       const data = await response.json();
 
       if (data.job_id) {
-        pollJobStatus(data.job_id, currentChatId, newMessages);
+        pollJobStatus(data.job_id, currentChatId!, newMessages);
       } else if (data.success) {
         // Store resume context
         setSessionId(data.session_id);
@@ -355,6 +482,20 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         setChats(prev => prev.map(c =>
           c.id === currentChatId ? { ...c, messages: updatedMessages } : c
         ));
+        
+        fetch(`/api/v1/chat/conversations/${currentChatId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'assistant', content: successMsg.content, metadata: { task_type: 'upload' } })
+        }).catch(err => console.error("Failed to save assistant upload message", err));
+        
+        if (data.session_id) {
+          fetch(`/api/v1/chat/conversations/${currentChatId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId: data.session_id })
+          }).catch(err => console.error("Failed to link session", err));
+        }
       } else {
         const errorMsg: Message = {
           id: (Date.now() + 1).toString(),

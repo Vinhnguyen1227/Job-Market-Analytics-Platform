@@ -1,0 +1,22 @@
+{
+  "turn1": {
+    "response": "Chào bạn! Tôi là CareerIntel AI, chuyên gia tư vấn nghề nghiệp. Bạn cần sự giúp đỡ về việc gì?",
+    "task_type": "general_response",
+    "session_id": "820be3ad",
+    "metadata": {
+      "tool": "general_response",
+      "latency_ms": 6156,
+      "trace_id": "c3878d8c62a1"
+    }
+  },
+  "turn2": {
+    "response": "I'm sorry for the misunderstanding earlier. I am here to help you with your career development and job search. Can you tell me more about what you're looking for or where you are in the process?",
+    "task_type": "general_response",
+    "session_id": "820be3ad",
+    "metadata": {
+      "tool": "general_response",
+      "latency_ms": 6180,
+      "trace_id": "0a8af0752148"
+    }
+  }
+}

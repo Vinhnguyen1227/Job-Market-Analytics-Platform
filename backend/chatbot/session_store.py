@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Session TTL: 24 hours
 SESSION_TTL = 86400
-MAX_HISTORY_TURNS = 10
+MAX_HISTORY_TURNS = 100 # Increased for larger sliding window
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
@@ -112,15 +112,19 @@ class SessionStore:
         }
 
     async def get_resume(self, session_id: str) -> tuple[Optional[str], Optional[dict]]:
-        """Get resume_id and resume_dict from session.
-
-        Returns:
-            Tuple of (resume_id, resume_dict). Both may be None.
-        """
+        """Get resume_id and resume_dict from session. First try Redis, then Mongo."""
+        # Try Redis
         session = await self.get(session_id)
-        if not session:
-            return None, None
-        return session.get("resume_id"), session.get("resume_dict")
+        if session and session.get("resume_id"):
+            return session.get("resume_id"), session.get("resume_dict")
+        
+        # Fallback Mongo
+        from mongo_client import mongo_client
+        mongo_data = await mongo_client.get_session_cv(session_id)
+        if mongo_data and mongo_data.get("resume_id"):
+            return mongo_data.get("resume_id"), mongo_data.get("resume_dict")
+        
+        return None, None
 
     async def set_resume(
         self,
@@ -129,14 +133,7 @@ class SessionStore:
         resume_dict: dict,
         resume_name: str,
     ):
-        """Store resume data in session.
-
-        Args:
-            session_id: Session to update.
-            resume_id: Qdrant point ID.
-            resume_dict: Parsed resume as dict.
-            resume_name: Display name for the resume.
-        """
+        """Store resume data in session (Redis) and Mongo."""
         await self.connect()
         data = {
             "resume_id": resume_id or "",
@@ -145,35 +142,48 @@ class SessionStore:
         }
         await self._redis.hset(self._key(session_id), mapping=data)
         await self._redis.expire(self._key(session_id), SESSION_TTL)
-        logger.info(f"Session {session_id}: resume stored (id={resume_id})")
+        logger.info(f"Session {session_id}: resume stored in Redis (id={resume_id})")
+
+        from mongo_client import mongo_client
+        await mongo_client.update_session_cv(session_id, resume_id, resume_dict, resume_name)
+        logger.info(f"Session {session_id}: resume stored in Mongo")
 
     async def get_history(self, session_id: str) -> list[dict]:
-        """Get conversation history.
-        
-        Returns:
-            List of dicts: [{'role': 'user', 'content': '...'}, ...]
-        """
-        await self.connect()
-        history_strs = await self._redis.lrange(self._history_key(session_id), 0, -1)
-        history = []
-        for h_str in history_strs:
-            try:
-                history.append(json.loads(h_str))
-            except json.JSONDecodeError:
-                continue
+        """Get conversation history. Read from Mongo."""
+        from mongo_client import mongo_client
+        history = await mongo_client.get_history(session_id)
         return history
 
-    async def append_history(self, session_id: str, role: str, content: str):
-        """Append message to history and trim to max window.
+    async def get_contextualized_history(self, session_id: str) -> tuple[list[dict], str | None]:
+        """Get contextualized history using sliding window and extractive summary."""
+        from mongo_client import mongo_client
+        from context_window import ContextWindowManager
         
-        Args:
-            session_id: Session ID
-            role: 'user' or 'assistant'
-            content: Message text
-        """
+        full_history = await self.get_history(session_id)
+        if not full_history:
+            return [], None
+            
+        kept_history, new_summary = ContextWindowManager.build_context(full_history)
+        
+        # If new summary generated, save it
+        if new_summary:
+            await mongo_client.save_conversation_summary(session_id, new_summary)
+            return kept_history, new_summary
+            
+        # Otherwise, try to fetch existing summary
+        existing_summary = await mongo_client.get_conversation_summary(session_id)
+        return kept_history, existing_summary
+
+    async def append_history(self, session_id: str, role: str, content: str):
+        """Append message to Mongo history and sync to Redis."""
         if not content:
             return
             
+        import time
+        from mongo_client import mongo_client
+        await mongo_client.save_history_message(session_id, role, content, time.time())
+
+        # Keep Redis sync for caching
         await self.connect()
         h_key = self._history_key(session_id)
         msg = json.dumps({"role": role, "content": content}, ensure_ascii=False)
@@ -182,7 +192,6 @@ class SessionStore:
         await self._redis.rpush(h_key, msg)
         
         max_msgs = MAX_HISTORY_TURNS * 2
-        # LTRIM keeps indices start to end. To keep last N items: LTRIM key -N -1
         await self._redis.ltrim(h_key, -max_msgs, -1)
         await self._redis.expire(h_key, SESSION_TTL)
 
@@ -191,4 +200,4 @@ class SessionStore:
         await self.connect()
         await self._redis.delete(self._key(session_id))
         await self._redis.delete(self._history_key(session_id))
-        logger.info(f"Session {session_id}: deleted")
+        logger.info(f"Session {session_id}: deleted from Redis (Mongo data kept)")

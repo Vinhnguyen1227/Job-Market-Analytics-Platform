@@ -52,21 +52,30 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    let body: { title?: string };
+    let body: { title?: string, sessionId?: string };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: 'Body không hợp lệ' }, { status: 400 });
     }
 
-    if (!body.title || typeof body.title !== 'string' || !body.title.trim()) {
+    if (!body.title && !body.sessionId) {
       return NextResponse.json(
-        { error: 'title là bắt buộc và không được để trống' },
+        { error: 'Cần cung cấp title hoặc sessionId để cập nhật' },
         { status: 400 }
       );
     }
+    
+    let updated;
+    
+    if (body.sessionId && typeof body.sessionId === 'string' && body.sessionId.trim()) {
+        const { updateSessionId } = await import('@/backend/mongodb/chatService');
+        updated = await updateSessionId(id, user.id, body.sessionId);
+    }
 
-    const updated = await updateConversationTitle(id, user.id, body.title);
+    if (body.title && typeof body.title === 'string' && body.title.trim()) {
+        updated = await updateConversationTitle(id, user.id, body.title);
+    }
     if (!updated) {
       return NextResponse.json(
         { error: 'Conversation không tồn tại hoặc không có quyền chỉnh sửa' },

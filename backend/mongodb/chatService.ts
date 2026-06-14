@@ -41,6 +41,7 @@ function toResponse(doc: Conversation): ConversationResponse {
     messages: doc.messages,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+    sessionId: doc.sessionId,
     isArchived: doc.isArchived,
   };
 }
@@ -56,6 +57,7 @@ function toListItem(doc: Conversation): ConversationListItem {
     title: doc.title,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+    sessionId: doc.sessionId,
     isArchived: doc.isArchived,
     messageCount: doc.messages.length,
     lastMessage: lastMessage
@@ -226,6 +228,29 @@ export async function updateConversationTitle(
   const result = await col.findOneAndUpdate(
     { _id: new ObjectId(conversationId), userId, isArchived: false },
     { $set: { title: title.trim(), updatedAt: now } },
+    { returnDocument: 'after' }
+  );
+
+  return result ? toResponse(result) : null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// updateSessionId
+// Liên kết FastAPI session_id vào conversation.
+// ─────────────────────────────────────────────────────────────
+export async function updateSessionId(
+  conversationId: string,
+  userId: string,
+  sessionId: string
+): Promise<ConversationResponse | null> {
+  if (!ObjectId.isValid(conversationId)) return null;
+
+  const col = await getCollection();
+  const now = new Date();
+
+  const result = await col.findOneAndUpdate(
+    { _id: new ObjectId(conversationId), userId, isArchived: false },
+    { $set: { sessionId: sessionId.trim(), updatedAt: now } },
     { returnDocument: 'after' }
   );
 

@@ -14,6 +14,7 @@ import asyncio
 import logging
 import os
 
+from celery import signals
 from celery_app import celery_app
 from job_tracker import JobTracker
 from session_store import SessionStore
@@ -22,6 +23,19 @@ logger = logging.getLogger(__name__)
 
 job_tracker = JobTracker()
 session_store = SessionStore()
+
+
+@signals.worker_init.connect
+def _on_worker_init(**kwargs):
+    """Pre-warm PhoBERT NER + BGE-M3 at worker startup.
+
+    Runs before any task is consumed so the first PDF upload
+    doesn't pay the ~50s model-loading penalty.
+    """
+    import pipeline_bridge
+    logger.info("worker_init: pre-warming pipeline models...")
+    pipeline_bridge.warmup()
+    logger.info("worker_init: models ready")
 
 
 @celery_app.task(bind=True, name="worker_tasks.process_cv_task")

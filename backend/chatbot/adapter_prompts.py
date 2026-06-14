@@ -77,6 +77,11 @@ của ứng viên. Hãy tạo 3 câu hỏi phỏng vấn kỹ thuật cụ thể
 thực tế của họ, kèm rubric chấm điểm."""
 
 
+CONVERSATION_SUMMARY_TEMPLATE = (
+    "Tóm tắt các lượt trò chuyện trước đó:\n{summary}\n\n"
+    "Sử dụng thông tin trên làm ngữ cảnh khi trả lời."
+)
+
 # ── Prompt Lookup ────────────────────────────────────
 
 ADAPTER_PROMPTS = {

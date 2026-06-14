@@ -38,7 +38,7 @@ def _resume_dict(session_data: dict | None) -> dict | None:
     return rd
 
 
-async def dispatch(tc, session_id: str, session_data: dict | None, user_message: str, history: list[dict] | None = None) -> dict:
+async def dispatch(tc, session_id: str, session_data: dict | None, user_message: str, history: list[dict] | None = None, conversation_summary: str | None = None) -> dict:
     """Execute a tool call. Always returns the chat envelope dict
     `{response, task_type, metadata}` consumed by `format_chat_response`.
     """
@@ -74,7 +74,7 @@ async def dispatch(tc, session_id: str, session_data: dict | None, user_message:
         cv_json_str = json.dumps(resume_dict or {}, ensure_ascii=False)
         user_prompt = f"CV (JSON):\n{cv_json_str}\n\nYêu cầu của ứng viên: {user_message}"
         md = await adapter_mgr.generate(
-            "hr_coach", system=HR_COACH_SYSTEM_PROMPT, user=user_prompt, history=history,
+            "hr_coach", system=HR_COACH_SYSTEM_PROMPT, user=user_prompt, history=history, conversation_summary=conversation_summary
         )
         return {
             "response": md,
@@ -98,7 +98,7 @@ async def dispatch(tc, session_id: str, session_data: dict | None, user_message:
             f"Câu hỏi của ứng viên: {user_message}"
         )
         md = await adapter_mgr.generate(
-            "hr_coach", system=HR_COACH_SYSTEM_PROMPT, user=user_prompt, history=history,
+            "hr_coach", system=HR_COACH_SYSTEM_PROMPT, user=user_prompt, history=history, conversation_summary=conversation_summary
         )
         return {
             "response": md,
@@ -132,7 +132,7 @@ async def dispatch(tc, session_id: str, session_data: dict | None, user_message:
             )
 
         md = await adapter_mgr.generate(
-            "structured_gen", system=system_prompt, user=user_prompt, history=history,
+            "structured_gen", system=system_prompt, user=user_prompt, history=history, conversation_summary=conversation_summary
         )
         return {
             "response": md,
@@ -147,7 +147,7 @@ async def dispatch(tc, session_id: str, session_data: dict | None, user_message:
 
     if tool == "general_response":
         md = await adapter_mgr.generate(
-            "hr_coach", system=HR_COACH_SYSTEM_PROMPT, user=user_message, history=history,
+            "hr_coach", system=HR_COACH_SYSTEM_PROMPT, user=user_message, history=history, conversation_summary=conversation_summary
         )
         return {
             "response": md,

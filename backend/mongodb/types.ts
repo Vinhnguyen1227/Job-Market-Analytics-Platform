@@ -62,6 +62,8 @@ export interface Conversation {
   messages: ChatMessage[];
   createdAt: Date;
   updatedAt: Date;
+  /** FastAPI session ID */
+  sessionId?: string;
   /** Soft delete flag */
   isArchived: boolean;
 }
@@ -86,6 +88,7 @@ export interface ConversationResponse {
   messages: ChatMessage[];
   createdAt: Date;
   updatedAt: Date;
+  sessionId?: string;
   isArchived: boolean;
 }
 
@@ -95,6 +98,7 @@ export interface ConversationListItem {
   title: string;
   createdAt: Date;
   updatedAt: Date;
+  sessionId?: string;
   isArchived: boolean;
   /** Số lượng message trong conversation */
   messageCount: number;

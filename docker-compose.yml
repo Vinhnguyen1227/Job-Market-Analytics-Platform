@@ -99,6 +99,7 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
       - OLLAMA_HOST=http://host.docker.internal:11434
+      - MONGODB_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/chatbot?authSource=admin
       - MODEL_TOOL_CALL=careerintel-tool-call
       - MODEL_HR_COACH=careerintel-hr-coach
       - MODEL_STRUCTURED_GEN=careerintel-structured-gen
@@ -122,6 +123,7 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_HOST=http://host.docker.internal:11434
+      - MONGODB_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/chatbot?authSource=admin
       - MODEL_HR_COACH=careerintel-hr-coach
       - MODEL_STRUCTURED_GEN=careerintel-structured-gen
     extra_hosts: ["host.docker.internal:host-gateway"]

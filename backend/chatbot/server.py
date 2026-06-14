@@ -43,6 +43,8 @@ job_tracker = JobTracker()
 async def lifespan(app: FastAPI):
     await session_store.connect()
     await job_tracker.connect()
+    from mongo_client import mongo_client
+    await mongo_client.connect()
     from enum_cache import enum_cache
     await enum_cache.get_valid_cities()
     await enum_cache.get_valid_exp_buckets()
@@ -53,6 +55,7 @@ async def lifespan(app: FastAPI):
     enum_cache.stop_refresh_task()
     await session_store.close()
     await job_tracker.close()
+    await mongo_client.close()
     try:
         await es_client.close()
     except Exception:
@@ -100,10 +103,21 @@ async def health():
     except Exception as e:
         logger.warning(f"redis ping fail: {e}")
         redis_ok = False
+        
+    mongo_ok = True
+    try:
+        from mongo_client import mongo_client
+        await mongo_client.connect()
+        await mongo_client._db.command("ping")
+    except Exception as e:
+        logger.warning(f"mongo ping fail: {e}")
+        mongo_ok = False
+        
     return {
         "status": "ok",
         "ollama": "up" if await adapter_mgr.health() else "down",
         "redis": "up" if redis_ok else "down",
+        "mongo": "up" if mongo_ok else "down",
         "qdrant": "up" if qdrant_client.health() else "down",
         "elasticsearch": "up" if await es_client.health() else "down",
     }
@@ -118,7 +132,16 @@ async def chat(req: ChatRequest, request: Request):
 
     session_id = await session_store.create(req.session_id)
     session_data = await session_store.get(session_id) or {}
-    history = await session_store.get_history(session_id)
+    
+    # Fetch contextualized history BEFORE saving the current user message
+    # to avoid duplicating the user message in the prompt
+    history, summary = await session_store.get_contextualized_history(session_id)
+
+    # Now persist the user message (non-fatal if fails)
+    try:
+        await session_store.append_history(session_id, "user", message)
+    except Exception:
+        logger.warning(f"Failed to persist user history for session {session_id}, continuing")
 
     # 1) slash command?
     tc = slash_commands.maybe_handle(message)
@@ -135,7 +158,7 @@ async def chat(req: ChatRequest, request: Request):
 
     # 3) dispatch
     try:
-        result = await dispatch(tc, session_id, session_data, message, history)
+        result = await dispatch(tc, session_id, session_data, message, history, summary)
     except Exception as e:
         logger.exception("tool_dispatcher blew up")
         raise HTTPException(
@@ -145,16 +168,28 @@ async def chat(req: ChatRequest, request: Request):
 
     # 4) persist history (non-fatal if Redis hiccups)
     try:
-        await session_store.append_history(session_id, "user", message)
         await session_store.append_history(session_id, "assistant", result["response"])
     except Exception:
-        logger.warning(f"Failed to persist history for session {session_id}, continuing")
+        logger.warning(f"Failed to persist assistant history for session {session_id}, continuing")
 
     md = result.get("metadata", {}) or {}
     md["trace_id"] = trace_id
     return format_chat_response(
         result["task_type"], result["response"], session_id, md,
     )
+
+@app.get("/api/history/{session_id}")
+async def get_chat_history(session_id: str):
+    """Return full conversation history for frontend session restore."""
+    from mongo_client import mongo_client
+    history = await mongo_client.get_history(session_id)
+    session = await session_store.get(session_id)
+    return {
+        "session_id": session_id,
+        "history": history,
+        "resume_id": session.get("resume_id") if session else None,
+        "resume_name": session.get("resume_name") if session else None,
+    }
 
 
 @app.post("/api/upload")
@@ -180,6 +215,9 @@ async def upload(file: UploadFile = File(...), session_id: Optional[str] = Form(
         f.write(content)
 
     bound_session = await session_store.create(session_id)
+
+    from mongo_client import mongo_client
+    await mongo_client.upload_pdf(bound_session, file.filename, content)
 
     from worker_tasks import process_cv_task
     job_id = uuid.uuid4().hex[:12]
@@ -215,6 +253,9 @@ async def kie(file: UploadFile = File(...)):
         f.write(content)
 
     throwaway_session = await session_store.create(None)
+
+    from mongo_client import mongo_client
+    await mongo_client.upload_pdf(throwaway_session, file.filename, content)
 
     from worker_tasks import process_cv_task
     job_id = uuid.uuid4().hex[:12]

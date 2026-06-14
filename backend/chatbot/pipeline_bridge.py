@@ -65,6 +65,7 @@ P4 = _load("phase4_pipeline", os.path.join(P4_DIR, "pipeline.py"))
 
 _pipeline3 = None
 _pipeline4 = None
+_warmed_up = False
 
 
 def _get_pipelines():
@@ -74,7 +75,7 @@ def _get_pipelines():
         # Skip LLM normalization (heavy 7B call) - quality_score still
         # works without it. NER stays on for Vietnamese entity extraction.
         _pipeline3 = P3.SemanticExtractionPipeline(
-            use_ner=os.environ.get("CHATBOT_USE_NER", "1") == "1",
+            use_ner=os.environ.get("CHATBOT_USE_NER", "0") == "1",
             use_llm=os.environ.get("CHATBOT_USE_LLM", "0") == "1",
             ner_device=os.environ.get("CHATBOT_NER_DEVICE", "cpu"),
         )
@@ -86,6 +87,42 @@ def _get_pipelines():
             db_path=os.environ.get("QDRANT_PATH", "data/qdrant_db"),
         )
     return _pipeline3, _pipeline4
+
+
+def warmup():
+    """Pre-load models and run dummy inference to trigger JIT compilation.
+
+    Call this from the Celery worker_init signal so the first real
+    PDF upload doesn't pay the ~50s cold-start penalty.
+    """
+    global _warmed_up
+    if _warmed_up:
+        return
+
+    t0 = time.time()
+    logger.info("pipeline_bridge: warming up PhoBERT NER + BGE-M3 models...")
+
+    pipeline3, pipeline4 = _get_pipelines()
+
+    # Warm NER model with a short dummy text
+    if pipeline3.use_ner and pipeline3.ner_extractor:
+        try:
+            pipeline3.ner_extractor.extract_from_text("Nguyễn Văn A làm việc tại FPT Software")
+            logger.info("  NER model warmed up")
+        except Exception as e:
+            logger.warning(f"  NER warmup failed (non-fatal): {e}")
+
+    # Warm embedding model with a short dummy text
+    if pipeline4.use_embeddings and pipeline4.embedder:
+        try:
+            pipeline4.embedder.embed_query("warmup")
+            logger.info("  Embedding model warmed up")
+        except Exception as e:
+            logger.warning(f"  Embedding warmup failed (non-fatal): {e}")
+
+    _warmed_up = True
+    logger.info(f"pipeline_bridge: warmup done ({time.time() - t0:.1f}s)")
+
 
 
 # ── File parsing ──────────────────────────────────────────────────────
