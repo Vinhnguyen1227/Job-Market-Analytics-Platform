@@ -40,7 +40,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(route)
   )
 
-  const isApiProtected = request.nextUrl.pathname.startsWith('/api/')
+  const publicApiRoutes = ['/api/chatbot', '/api/kie']
+  const isApiProtected = request.nextUrl.pathname.startsWith('/api/') &&
+    !publicApiRoutes.some(route => request.nextUrl.pathname.startsWith(route))
 
   if (!user && (isProtectedRoute || isApiProtected)) {
     if (isApiProtected) {

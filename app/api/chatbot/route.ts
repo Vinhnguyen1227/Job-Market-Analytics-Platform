@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/backend/supabase/server';
 
 const BACKEND_URL = process.env.CHATBOT_BACKEND_URL || 'http://localhost:8000';
 
@@ -10,6 +11,9 @@ const BACKEND_URL = process.env.CHATBOT_BACKEND_URL || 'http://localhost:8000';
  */
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
     const body = await request.json();
 
     const response = await fetch(`${BACKEND_URL}/api/chat`, {
@@ -18,6 +22,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         message: body.message || '',
         session_id: body.session_id || null,
+        user_id: user?.id || null,
         history: body.history || [],
       }),
     });

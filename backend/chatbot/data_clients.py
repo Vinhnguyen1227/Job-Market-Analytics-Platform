@@ -80,6 +80,7 @@ class ElasticsearchClient:
         Returns a list of `raw_data` dicts (full job documents).
         """
         keyword = params.get("keyword")
+        company = params.get("company")
         location = params.get("location")
         experience = params.get("experience")
         work_type = params.get("work_type")
@@ -89,7 +90,25 @@ class ElasticsearchClient:
         must: list[dict] = []
         filt: list[dict] = []
 
-        if keyword:
+        if company:
+            must.append({
+                "match": {
+                    "cong_ty": {
+                        "query": company,
+                        "fuzziness": "AUTO"
+                    }
+                }
+            })
+            if keyword:
+                must.append({
+                    "match": {
+                        "tieu_de": {
+                            "query": keyword,
+                            "fuzziness": "AUTO"
+                        }
+                    }
+                })
+        elif keyword:
             must.append({
                 "multi_match": {
                     "query": keyword,

@@ -1,7 +1,6 @@
 from tool_schemas import ToolCallResult
 
 SLASH = {
-    "/search": lambda rest: ToolCallResult(tool="search_jobs", params={"keyword": rest}),
     "/coach": lambda rest: ToolCallResult(tool="assess_resume", params={"focus_areas": []}),
     "/review": lambda rest: ToolCallResult(tool="assess_resume", params={"focus_areas": []}),
     "/match": lambda rest: ToolCallResult(tool="match_jobs", params={"jd_text": rest}),

@@ -18,3 +18,5 @@ motor>=3.3.2
 # ONNX acceleration for embeddings (~2x faster on CPU)
 onnxruntime>=1.18
 optimum[onnxruntime]>=1.19
+supabase>=2.0.0
+python-dotenv>=1.0.0

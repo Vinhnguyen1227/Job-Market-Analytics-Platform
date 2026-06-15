@@ -98,6 +98,29 @@ export async function POST(req: NextRequest) {
     // Upload vẫn thành công, chỉ DB insert thất bại — không block
   }
 
+  // Trigger Chatbot Extraction Pipeline in the background
+  const BACKEND_URL = process.env.CHATBOT_BACKEND_URL || 'http://localhost:8000';
+  const backendForm = new FormData();
+  const fileBlob = new Blob([bytes], { type: file.type });
+  backendForm.append('file', fileBlob, file.name);
+  backendForm.append('user_id', user.id);
+  
+  let jobId = null;
+  try {
+    const extRes = await fetch(`${BACKEND_URL}/api/upload`, {
+      method: 'POST',
+      body: backendForm,
+    });
+    if (extRes.ok) {
+      const extData = await extRes.json();
+      jobId = extData.job_id;
+    } else {
+      console.error('[CV Upload] Chatbot extraction failed to queue:', await extRes.text());
+    }
+  } catch (err) {
+    console.error('[CV Upload] Failed to call chatbot backend for extraction:', err);
+  }
+
   return NextResponse.json({
     success: true,
     fileName: file.name,
@@ -106,6 +129,7 @@ export async function POST(req: NextRequest) {
     signedUrl: signedData.signedUrl,
     filePath,
     uploadedAt,
+    jobId, // Return jobId so frontend knows it's extracting
   });
 }
 
@@ -171,6 +195,7 @@ export async function DELETE() {
 
   // Xóa record khỏi DB
   await supabase.from('user_cvs').delete().eq('user_id', user.id);
+  await supabase.from('user_resume_data').delete().eq('user_id', user.id);
 
   return NextResponse.json({ success: true });
 }

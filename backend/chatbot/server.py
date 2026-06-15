@@ -89,6 +89,7 @@ async def trace_id_middleware(request: Request, call_next):
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    user_id: Optional[str] = None
     history: list[dict[str, Any]] = []
 
 
@@ -160,6 +161,16 @@ async def chat(req: ChatRequest, request: Request):
     session_id = await session_store.create(req.session_id)
     session_data = await session_store.get(session_id) or {}
     
+    # Supabase Fallback logic
+    if req.user_id:
+        from supabase_client import supabase_client
+        resume_name, resume_json = supabase_client.get_user_resume(req.user_id)
+        if resume_json and not session_data.get("resume_id"):
+            # Overwrite session data with persistent data ONLY if no session resume exists
+            session_data["resume_id"] = req.user_id  # Use user_id as resume_id for db-loaded resumes
+            session_data["resume_dict"] = resume_json
+            session_data["resume_name"] = resume_name
+
     # Fetch contextualized history BEFORE saving the current user message
     # to avoid duplicating the user message in the prompt
     history, summary = await session_store.get_contextualized_history(session_id)
@@ -175,7 +186,18 @@ async def chat(req: ChatRequest, request: Request):
     # 2) Adapter A
     if tc is None:
         try:
-            tc = await router_route(message)
+            route_msg = message
+            if message.lower().startswith("/search"):
+                rest = message[7:].strip()
+                route_msg = f"BẮT BUỘC dùng tool search_jobs để trích xuất các tham số tìm kiếm (company, location, min_salary, max_salary, experience, work_type, keyword) từ câu sau: {rest}"
+
+            tc = await router_route(route_msg)
+            
+            if message.lower().startswith("/search") and tc.tool != "search_jobs":
+                logger.warning("Adapter A ignored forceful /search prompt, falling back to raw keyword")
+                from tool_schemas import ToolCallResult as _TCR
+                tc = _TCR(tool="search_jobs", params={"keyword": message[7:].strip()})
+                
         except Exception as e:
             logger.exception("intent_router blew up")
             raise HTTPException(
@@ -233,7 +255,7 @@ async def get_chat_history(session_id: str):
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
+async def upload(file: UploadFile = File(...), session_id: Optional[str] = Form(None), user_id: Optional[str] = Form(None)):
     # We need the worker to know the SAME job_id we return to the FE,
     # so we generate the id here once and pass it both to JobTracker
     # and to the Celery task.
@@ -261,7 +283,7 @@ async def upload(file: UploadFile = File(...), session_id: Optional[str] = Form(
 
     from worker_tasks import process_cv_task
     job_id = uuid.uuid4().hex[:12]
-    task = process_cv_task.delay(tmp_path, file.filename, bound_session, job_id)
+    task = process_cv_task.delay(tmp_path, file.filename, bound_session, job_id, user_id or "")
     # Register the job under the SAME job_id we just gave the worker.
     await _register_job(job_id, bound_session, "upload", task.id)
 

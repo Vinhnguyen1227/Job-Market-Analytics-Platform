@@ -25,7 +25,7 @@ job_tracker = JobTracker()
 session_store = SessionStore()
 
 
-@signals.worker_init.connect
+@signals.worker_process_init.connect
 def _on_worker_init(**kwargs):
     """Pre-warm PhoBERT NER + BGE-M3 at worker startup.
 
@@ -39,7 +39,7 @@ def _on_worker_init(**kwargs):
 
 
 @celery_app.task(bind=True, name="worker_tasks.process_cv_task")
-def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id: str):
+def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id: str, user_id: str = ""):
     """Parse CV file via Phase 3+4, persist results.
 
     Status flow on the JobTracker:
@@ -49,11 +49,20 @@ def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id
     # Importing here keeps worker fork-time fast and avoids loading PhoBERT
     # in the FastAPI process that only enqueues jobs.
     import pipeline_bridge
+    from supabase_client import supabase_client
 
     async def _run():
         await job_tracker.update_status(job_id, "PROCESSING")
         try:
             result = pipeline_bridge.run_phase34(file_path)
+            
+            # Strip debug data before storing
+            resume_dict = result.get("resume_dict", {})
+            for key in ["raw_entities", "chunks", "metadata"]:
+                if key in resume_dict:
+                    del resume_dict[key]
+            result["resume_dict"] = resume_dict
+            
             result["session_id"] = session_id or ""
             result["task_type"] = "upload"
             result["response"] = (
@@ -75,6 +84,16 @@ def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id
                     result["resume_id"],
                     result["resume_dict"],
                     result["resume_name"],
+                )
+                
+            if user_id:
+                supabase_client.upsert_user_resume(
+                    user_id=user_id,
+                    resume_dict=result["resume_dict"],
+                    resume_name=result.get("resume_name", filename),
+                    quality_score=result.get("quality_score", 0),
+                    num_experience=result.get("num_experience", 0),
+                    num_skills=result.get("num_skills", 0)
                 )
 
             await job_tracker.update_status(job_id, "COMPLETED", result=result)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/backend/supabase/server';
 
 const BACKEND_URL = process.env.CHATBOT_BACKEND_URL || 'http://localhost:8000';
 
@@ -10,6 +11,9 @@ const BACKEND_URL = process.env.CHATBOT_BACKEND_URL || 'http://localhost:8000';
  */
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const sessionId = formData.get('session_id') as string | null;
@@ -46,6 +50,9 @@ export async function POST(request: NextRequest) {
     backendForm.append('file', file);
     if (sessionId) {
       backendForm.append('session_id', sessionId);
+    }
+    if (user?.id) {
+      backendForm.append('user_id', user.id);
     }
 
     const response = await fetch(`${BACKEND_URL}/api/upload`, {

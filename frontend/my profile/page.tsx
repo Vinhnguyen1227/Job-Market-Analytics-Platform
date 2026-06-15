@@ -46,6 +46,8 @@ export default function MyProfile({ user }: { user?: any }) {
   const [isDraggingCv, setIsDraggingCv] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
   const [isDeletingCv, setIsDeletingCv] = useState(false);
+  const [isExtracted, setIsExtracted] = useState(false);
+  const [isExtractingCv, setIsExtractingCv] = useState(false);
   const cvInputRef = useRef<HTMLInputElement>(null);
 
   const uploadCv = useCallback(async (file: File) => {
@@ -67,6 +69,10 @@ export default function MyProfile({ user }: { user?: any }) {
       const data = await res.json();
       if (!res.ok) { setCvError(data.error || 'Upload thất bại'); return; }
       setCvFile({ id: '', user_id: '', file_name: data.fileName, file_size: data.fileSize, file_type: data.fileType, file_path: data.filePath || '', uploaded_at: data.uploadedAt || new Date().toISOString(), signed_url: data.signedUrl });
+      setIsExtracted(false);
+      if (data.jobId) {
+        setIsExtractingCv(true);
+      }
     } catch {
       setCvError('Lỗi kết nối, vui lòng thử lại');
     } finally {
@@ -91,7 +97,10 @@ export default function MyProfile({ user }: { user?: any }) {
     setIsDeletingCv(true);
     try {
       const res = await fetch('/api/v1/cv/upload', { method: 'DELETE' });
-      if (res.ok) setCvFile(null);
+      if (res.ok) {
+          setCvFile(null);
+          setIsExtracted(false);
+      }
     } finally {
       setIsDeletingCv(false);
     }
@@ -127,11 +136,35 @@ export default function MyProfile({ user }: { user?: any }) {
         if (data.educations) setEducations(data.educations);
         if (data.skills) setSkills(data.skills);
         if (data.cv) setCvFile(data.cv);
+        if (data.isExtracted) {
+          setIsExtracted(true);
+          setIsExtractingCv(false);
+        }
         setProfileLoaded(true);
       })
       .catch(() => setProfileLoaded(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll for extraction status
+  useEffect(() => {
+    if (!isExtractingCv) return;
+
+    const interval = setInterval(() => {
+      fetch('/api/v1/profile')
+        .then(r => r.json())
+        .then(data => {
+          if (data.isExtracted) {
+            setIsExtracted(true);
+            setIsExtractingCv(false);
+            clearInterval(interval);
+          }
+        })
+        .catch(console.error);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isExtractingCv]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -448,7 +481,11 @@ export default function MyProfile({ user }: { user?: any }) {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-semibold text-slate-800 truncate">{cvFile.file_name}</p>
+                    <p className="text-[14px] font-semibold text-slate-800 truncate">
+                      {cvFile.file_name} 
+                      {isExtracted && <span className="ml-2 text-[12px] font-normal text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">(Đã trích xuất)</span>}
+                      {!isExtracted && isExtractingCv && <span className="ml-2 text-[12px] font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">(Đang trích xuất...)</span>}
+                    </p>
                     <p className="text-[12px] text-gray-400 mt-0.5">
                       {formatFileSize(cvFile.file_size || 0)} · Cập nhật {new Date(cvFile.uploaded_at).toLocaleDateString('vi-VN')}
                     </p>

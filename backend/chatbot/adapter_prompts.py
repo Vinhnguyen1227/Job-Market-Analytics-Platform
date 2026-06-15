@@ -16,7 +16,8 @@ Bạn có thể sử dụng các công cụ sau. Khi cần, trả lời CHÍNH X
 ## Công cụ:
 
 1. search_jobs: Tìm kiếm việc làm
-   - keyword (string): Từ khóa tìm kiếm
+   - keyword (string|null): Từ khóa tìm kiếm (chỉ chức danh/vị trí)
+   - company (string|null): Tên công ty (nếu có)
    - location (string|null): Thành phố
    - min_salary (int|null): Lương tối thiểu (triệu VND)
    - max_salary (int|null): Lương tối đa (triệu VND)

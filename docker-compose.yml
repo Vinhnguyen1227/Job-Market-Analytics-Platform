@@ -93,7 +93,9 @@ services:
     ports:
       - "8000:8000"
     command: uvicorn server:app --host 0.0.0.0 --port 8000
-    env_file: [.env.docker]
+    env_file: 
+      - .env.docker
+      - .env.local
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - QDRANT_URL=http://qdrant:6333
@@ -117,8 +119,10 @@ services:
       context: .
       dockerfile: backend/chatbot/Dockerfile
     container_name: job-market-celery
-    command: celery -A celery_app worker -l info -Q ml
-    env_file: [.env.docker]
+    command: celery -A celery_app worker -l info -Q ml -c 1
+    env_file: 
+      - .env.docker
+      - .env.local
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - QDRANT_URL=http://qdrant:6333

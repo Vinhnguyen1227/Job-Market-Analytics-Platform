@@ -37,6 +37,7 @@ class SearchJobsParams(BaseModel):
     """Parameters for search_jobs tool."""
 
     keyword: Optional[str] = None
+    company: Optional[str] = None
     location: Optional[str] = None
     min_salary: Optional[int] = Field(None, ge=0, le=200)
     max_salary: Optional[int] = Field(None, ge=0, le=200)
@@ -68,9 +69,22 @@ class SearchJobsParams(BaseModel):
     @field_validator("experience")
     @classmethod
     def validate_exp(cls, v):
+        if v is None:
+            return v
+        v_low = v.lower()
+        if "fresher" in v_low or "thực tập" in v_low or "intern" in v_low:
+            v = "Chưa có kinh nghiệm"
+        elif "junior" in v_low:
+            v = "1 - 3 năm"
+        elif "senior" in v_low:
+            v = "3 - 5 năm"
+
         from enum_cache import enum_cache
         exp_buckets = enum_cache.exp_buckets
-        if exp_buckets and v is not None and v not in exp_buckets:
+        if exp_buckets and v not in exp_buckets:
+            for bucket in exp_buckets:
+                if v.lower() in bucket.lower() or bucket.lower() in v.lower():
+                    return bucket
             logger.warning(f"Unknown experience passed through: {v}")
         return v
 

@@ -16,13 +16,14 @@ export async function GET() {
   }
 
   // Fetch song song tất cả bảng để tối ưu latency
-  const [profileRes, experiencesRes, educationsRes, skillsRes, cvRes] =
+  const [profileRes, experiencesRes, educationsRes, skillsRes, cvRes, resumeDataRes] =
     await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).single(),
       supabase.from('experiences').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('educations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('skills').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('user_cvs').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase.from('user_resume_data').select('user_id').eq('user_id', user.id).maybeSingle(),
     ])
 
   // Nếu chưa có profile row (user đăng ký trước khi có trigger), tạo mới
@@ -59,5 +60,6 @@ export async function GET() {
     educations: educationsRes.data ?? [],
     skills: skillsRes.data ?? [],
     cv,
+    isExtracted: !!resumeDataRes.data,
   })
 }
