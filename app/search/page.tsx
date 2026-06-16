@@ -1,5 +1,6 @@
 import JobSearchPage from '@/frontend/job search/page';
 import { createClient } from '@/backend/supabase/server';
+import { PageErrorBoundary } from '@/frontend/components/PageErrorBoundary';
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -11,6 +12,10 @@ export default async function JobSearch() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <JobSearchPage user={user} />;
+  return (
+    <PageErrorBoundary pageName="Tìm kiếm việc làm">
+      <JobSearchPage user={user} />
+    </PageErrorBoundary>
+  );
 }
 

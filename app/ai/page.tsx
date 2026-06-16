@@ -1,5 +1,6 @@
 import AIAssistantPage from '@/frontend/ai assistant/page';
 import { createClient } from '@/backend/supabase/server';
+import { PageErrorBoundary } from '@/frontend/components/PageErrorBoundary';
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -11,5 +12,9 @@ export default async function AIPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <AIAssistantPage user={user} />;
+  return (
+    <PageErrorBoundary pageName="AI Assistant">
+      <AIAssistantPage user={user} />
+    </PageErrorBoundary>
+  );
 }
