@@ -80,8 +80,9 @@ class ElasticsearchClient:
         Returns a list of `raw_data` dicts (full job documents).
         """
         keyword = params.get("keyword")
-        company = params.get("company")
         location = params.get("location")
+        category = params.get("category")
+        level = params.get("level")
         experience = params.get("experience")
         work_type = params.get("work_type")
         min_salary = params.get("min_salary")
@@ -90,25 +91,7 @@ class ElasticsearchClient:
         must: list[dict] = []
         filt: list[dict] = []
 
-        if company:
-            must.append({
-                "match": {
-                    "cong_ty": {
-                        "query": company,
-                        "fuzziness": "AUTO"
-                    }
-                }
-            })
-            if keyword:
-                must.append({
-                    "match": {
-                        "tieu_de": {
-                            "query": keyword,
-                            "fuzziness": "AUTO"
-                        }
-                    }
-                })
-        elif keyword:
+        if keyword:
             must.append({
                 "multi_match": {
                     "query": keyword,
@@ -119,6 +102,10 @@ class ElasticsearchClient:
             })
         if location:
             filt.append({"terms": {"cities": [location]}})
+        if category:
+            filt.append({"terms": {"categories": [category]}})
+        if level:
+            filt.append({"terms": {"levels": [level]}})
         if experience:
             filt.append({"terms": {"expBuckets": [experience]}})
         if work_type:
@@ -150,6 +137,12 @@ class ElasticsearchClient:
         for h in res["hits"]["hits"]:
             src = h.get("_source", {}) or {}
             raw = src.get("raw_data") or src
+            
+            if location and isinstance(raw.get("cities"), list):
+                if location in raw["cities"]:
+                    raw["cities"].remove(location)
+                    raw["cities"].insert(0, location)
+                    
             out.append(raw)
         return out
 

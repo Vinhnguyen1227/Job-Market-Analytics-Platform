@@ -16,12 +16,13 @@ Bạn có thể sử dụng các công cụ sau. Khi cần, trả lời CHÍNH X
 ## Công cụ:
 
 1. search_jobs: Tìm kiếm việc làm
-   - keyword (string|null): Từ khóa tìm kiếm (chỉ chức danh/vị trí)
-   - company (string|null): Tên công ty (nếu có)
+   - keyword (string|null): Từ khóa tìm kiếm (bao gồm chức danh, vị trí, tên công ty)
    - location (string|null): Thành phố
+   - category (string|null): Ngành nghề / lĩnh vực
+   - level (string|null): Cấp bậc (Intern, Fresher, Junior, Middle, Senior, Manager, v.v.)
    - min_salary (int|null): Lương tối thiểu (triệu VND)
    - max_salary (int|null): Lương tối đa (triệu VND)
-   - experience (string|null): Kinh nghiệm
+   - experience (string|null): Số năm kinh nghiệm
    - work_type (string|null): Hình thức làm việc
 
 2. assess_resume: Đánh giá CV đã upload
