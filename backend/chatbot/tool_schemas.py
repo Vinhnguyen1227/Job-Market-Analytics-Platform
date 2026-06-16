@@ -26,8 +26,10 @@ LOCATION_ALIASES = {
     "hcm": "Hồ Chí Minh",
     "hn": "Hà Nội",
     "ha noi": "Hà Nội",
+    "hanoi": "Hà Nội",
     "đn": "Đà Nẵng",
     "da nang": "Đà Nẵng",
+    "danang": "Đà Nẵng",
 }
 
 

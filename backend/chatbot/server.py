@@ -189,7 +189,7 @@ async def chat(req: ChatRequest, request: Request):
             route_msg = message
             if message.lower().startswith("/search"):
                 rest = message[7:].strip()
-                route_msg = f"BẮT BUỘC dùng tool search_jobs để trích xuất các tham số tìm kiếm (company, location, min_salary, max_salary, experience, work_type, keyword) từ câu sau: {rest}"
+                route_msg = f"BẮT BUỘC dùng tool search_jobs để trích xuất các tham số (location, company, min_salary, max_salary, experience, work_type, keyword). CHÚ Ý: Phải tách riêng location (thành phố) ra khỏi keyword. Câu tìm kiếm: {rest}"
 
             tc = await router_route(route_msg)
             
