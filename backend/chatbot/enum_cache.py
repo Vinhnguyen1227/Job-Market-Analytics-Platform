@@ -15,6 +15,10 @@ class EnumCache:
         self._exp_ts: float = 0
         self._work_types: list[str] = []
         self._work_types_ts: float = 0
+        self._categories: list[str] = []
+        self._categories_ts: float = 0
+        self._levels: list[str] = []
+        self._levels_ts: float = 0
         self._refresh_task: asyncio.Task | None = None
 
     # ── Sync properties for Pydantic validators ──────────────────
@@ -33,6 +37,16 @@ class EnumCache:
     def work_types(self) -> list[str]:
         """Sync access to cached work types."""
         return self._work_types
+
+    @property
+    def categories(self) -> list[str]:
+        """Sync access to cached categories."""
+        return self._categories
+
+    @property
+    def levels(self) -> list[str]:
+        """Sync access to cached levels."""
+        return self._levels
 
     # ── Async fetch methods ──────────────────────────────────────
 
@@ -69,6 +83,28 @@ class EnumCache:
                 logger.warning(f"Failed to fetch work types from ES: {e}")
         return self._work_types
 
+    async def get_valid_categories(self) -> list[str]:
+        now = time.time()
+        if not self._categories or (now - self._categories_ts > CACHE_TTL):
+            from data_clients import es_client
+            try:
+                self._categories = await es_client.get_distinct_categories()
+                self._categories_ts = now
+            except Exception as e:
+                logger.warning(f"Failed to fetch categories from ES: {e}")
+        return self._categories
+
+    async def get_valid_levels(self) -> list[str]:
+        now = time.time()
+        if not self._levels or (now - self._levels_ts > CACHE_TTL):
+            from data_clients import es_client
+            try:
+                self._levels = await es_client.get_distinct_levels()
+                self._levels_ts = now
+            except Exception as e:
+                logger.warning(f"Failed to fetch levels from ES: {e}")
+        return self._levels
+
     # ── Background refresh ───────────────────────────────────────
 
     async def _refresh_loop(self):
@@ -80,6 +116,8 @@ class EnumCache:
                 await self.get_valid_cities()
                 await self.get_valid_exp_buckets()
                 await self.get_valid_work_types()
+                await self.get_valid_categories()
+                await self.get_valid_levels()
             except Exception as e:
                 logger.warning(f"EnumCache refresh failed: {e}")
 

@@ -176,6 +176,26 @@ class ElasticsearchClient:
             logger.error(f"ES aggs failed for workTypes: {e}")
             return []
 
+    async def get_distinct_categories(self) -> list[str]:
+        body = {"size": 0, "aggs": {"distinct_categories": {"terms": {"field": "categories", "size": 500}}}}
+        try:
+            res = await self._client.search(index=self.INDEX, body=body)
+            buckets = res.get("aggregations", {}).get("distinct_categories", {}).get("buckets", [])
+            return [b["key"] for b in buckets]
+        except Exception as e:
+            logger.error(f"ES aggs failed for categories: {e}")
+            return []
+
+    async def get_distinct_levels(self) -> list[str]:
+        body = {"size": 0, "aggs": {"distinct_levels": {"terms": {"field": "levels", "size": 100}}}}
+        try:
+            res = await self._client.search(index=self.INDEX, body=body)
+            buckets = res.get("aggregations", {}).get("distinct_levels", {}).get("buckets", [])
+            return [b["key"] for b in buckets]
+        except Exception as e:
+            logger.error(f"ES aggs failed for levels: {e}")
+            return []
+
 
 class ResumeQdrantClient:
     """Resume vector store reader.

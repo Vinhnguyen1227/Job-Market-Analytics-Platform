@@ -188,10 +188,10 @@ async def chat(req: ChatRequest, request: Request):
         try:
             route_msg = message
             if message.lower().startswith("/search"):
-                rest = message[7:].strip()
-                route_msg = f"BẮT BUỘC dùng tool search_jobs để trích xuất các tham số (location, company, min_salary, max_salary, experience, work_type, keyword). CHÚ Ý: Phải tách riêng location (thành phố) ra khỏi keyword. Câu tìm kiếm: {rest}"
+                route_msg = message[7:].strip()
 
             tc = await router_route(route_msg)
+            logger.info(f"Adapter A tool: {tc.tool}, params: {tc.params}")
             
             if message.lower().startswith("/search") and tc.tool != "search_jobs":
                 logger.warning("Adapter A ignored forceful /search prompt, falling back to raw keyword")

@@ -84,6 +84,42 @@ class SearchJobsParams(BaseModel):
             logger.warning(f"Unknown experience passed through: {v}")
         return v
 
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v):
+        if v is None:
+            return v
+        from enum_cache import enum_cache
+        cats = enum_cache.categories
+        if cats and v not in cats:
+            for c in cats:
+                if v.lower() in c.lower() or c.lower() in v.lower():
+                    return c
+            logger.warning(f"Unknown category passed through: {v}")
+        return v
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v):
+        if v is None:
+            return v
+        v_low = v.lower()
+        if "fresher" in v_low or "thực tập" in v_low or "intern" in v_low:
+            return "Thực tập sinh"
+        elif "junior" in v_low:
+            return "Nhân viên"
+        elif "senior" in v_low:
+            return "Nhân viên" # Often mapped to Nhân viên or Trưởng nhóm depending on data, fallback to fuzzy
+        
+        from enum_cache import enum_cache
+        levels = enum_cache.levels
+        if levels and v not in levels:
+            for l in levels:
+                if v.lower() in l.lower() or l.lower() in v.lower():
+                    return l
+            logger.warning(f"Unknown level passed through: {v}")
+        return v
+
     @field_validator("work_type")
     @classmethod
     def validate_work_type(cls, v):
