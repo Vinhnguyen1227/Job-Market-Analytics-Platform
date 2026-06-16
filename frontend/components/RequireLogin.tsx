@@ -95,7 +95,7 @@ export default function RequireLogin({ type = 'default' }: RequireLoginProps) {
 
           <Link href="/login" className="w-full sm:w-auto">
             <button className="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-slate-800 font-semibold px-8 py-3.5 rounded-xl shadow-sm hover:-translate-y-0.5 transition duration-200 flex items-center justify-center gap-2 cursor-pointer border border-transparent">
-              Login In
+              Log In
             </button>
           </Link>
         </div>

@@ -1,5 +1,6 @@
 import MarketInsightsPage from '@/frontend/market insights/page';
 import { createClient } from '@/backend/supabase/server';
+import { PageErrorBoundary } from '@/frontend/components/PageErrorBoundary';
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -27,5 +28,9 @@ export default async function InsightsRoute() {
     console.error('Lỗi server query Supabase:', error);
   }
 
-  return <MarketInsightsPage user={user} jobs={jobsData} />;
+  return (
+    <PageErrorBoundary pageName="Market Insights">
+      <MarketInsightsPage user={user} jobs={jobsData} />
+    </PageErrorBoundary>
+  );
 }

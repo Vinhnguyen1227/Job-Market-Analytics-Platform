@@ -25,11 +25,11 @@ const INDEX = 'jobs';
 
 // ─── 1. Tạo/cập nhật mapping của index ────────────────────────────────────────
 
-async function ensureIndex() {
+async function recreateIndex() {
   const exists = await esClient.indices.exists({ index: INDEX });
   if (exists) {
-    console.log(`[ES] Index "${INDEX}" đã tồn tại, bỏ qua bước tạo mới.`);
-    return;
+    await esClient.indices.delete({ index: INDEX });
+    console.log(`[ES] Đã xóa index "${INDEX}" cũ.`);
   }
 
   await esClient.indices.create({
@@ -50,7 +50,7 @@ async function ensureIndex() {
       },
     },
   });
-  console.log(`[ES] Đã tạo index "${INDEX}" thành công.`);
+  console.log(`[ES] Đã tạo lại index "${INDEX}".`);
 }
 
 // ─── 2. Chuyển đổi 1 job thành document ES ─────────────────────────────────────
@@ -61,7 +61,7 @@ function toEsDoc(job: any) {
     tieu_de:       job.tieu_de || job.title || '',
     cong_ty:       job.cong_ty || job.company || '',
     cities:        splitLocations(job.dia_diem || job.location || '').filter(isValidInfo),
-    categories:    (job.nganh_nghe || '').split(',').map((c: string) => c.trim()).filter(isValidInfo),
+    categories:    [job.nganh_nghe_chuan_hoa].filter((c): c is string => typeof c === 'string' && isValidInfo(c)),
     workTypes:     getWorkTypeTags(job.hinh_thuc_lam_viec),
     levels:        getLevels(job.cap_bac),
     expBuckets:    getExpBuckets(job.kinh_nghiem_lam_viec),
@@ -95,7 +95,7 @@ async function bulkIndex(jobs: any[]) {
 async function syncAll() {
   console.log('=== BẮT ĐẦU SYNC SUPABASE → ELASTICSEARCH ===\n');
 
-  await ensureIndex();
+  await recreateIndex();
 
   let offset = 0;
   const batchSize = 500;
@@ -135,7 +135,7 @@ async function syncAll() {
     offset += batchSize;
   }
 
-  console.log(`\n=== HOÀN TẤT: Lấy ${totalFetched} từ Supabase → Index ${totalSynced} vào Elasticsearch ===`);
+  console.log(`\n=== HOÀN TẤT: Xóa index cũ → Index lại ${totalSynced} documents từ Supabase vào Elasticsearch ===`);
   process.exit(0);
 }
 

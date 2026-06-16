@@ -1,5 +1,6 @@
 import JobDetailPage from '@/frontend/job detail/page';
 import { createClient } from '@/backend/supabase/server';
+import { PageErrorBoundary } from '@/frontend/components/PageErrorBoundary';
 
 export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
@@ -36,5 +37,9 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   if (error) console.error("Error fetching allJobs for tags:", error);
   if (fetchAll) allJobs = fetchAll;
 
-  return <JobDetailPage user={user} jobId={jobId} initialJob={initialJob} relatedJobs={relatedJobs} allJobs={allJobs} />;
+  return (
+    <PageErrorBoundary pageName="Chi tiết việc làm">
+      <JobDetailPage user={user} jobId={jobId} initialJob={initialJob} relatedJobs={relatedJobs} allJobs={allJobs} />
+    </PageErrorBoundary>
+  );
 }

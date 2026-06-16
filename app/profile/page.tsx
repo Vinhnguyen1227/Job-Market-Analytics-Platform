@@ -1,5 +1,6 @@
 import MyProfilePage from '@/frontend/my profile/page';
 import { createClient } from '@/backend/supabase/server';
+import { PageErrorBoundary } from '@/frontend/components/PageErrorBoundary';
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -11,5 +12,9 @@ export default async function Profile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <MyProfilePage user={user} />;
+  return (
+    <PageErrorBoundary pageName="Hồ sơ cá nhân">
+      <MyProfilePage user={user} />
+    </PageErrorBoundary>
+  );
 }
