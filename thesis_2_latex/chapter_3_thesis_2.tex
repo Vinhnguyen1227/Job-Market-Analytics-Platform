@@ -1,0 +1,51 @@
+\chapter{Polyglot Persistence and Search Infrastructure}
+
+This chapter outlines the core data architecture of the Job Market Analytics Platform. Managing diverse data types—ranging from highly structured user profiles to massive, unstructured job postings—requires a specialized approach. The system adopts a polyglot persistence strategy, utilizing five distinct databases (Supabase, Redis, MongoDB, Elasticsearch, and Qdrant), each selected to optimally address specific data shapes and access patterns.
+
+\chapter{# 3.1 Polyglot Persistence Justification}
+
+The platform handles several distinct data workloads:
+\begin{enumerate}
+\item  \textbf{Relational Data:} User accounts, authentication, and structured relationships (e.g., user-to-job applications).
+\item  \textbf{Search Data:} Millions of text-heavy job descriptions requiring complex full-text search and facet filtering.
+\item  \textbf{Ephemeral/Cache Data:} High-speed session tokens, background job tracking, and frequent query results.
+\item  \textbf{Unstructured Chat Data:} Dynamic, schema-less chatbot conversation logs (handled via MongoDB).
+\item  \textbf{Vector Data:} Semantic embeddings for AI-driven skill matching (handled via Qdrant).
+\end{enumerate}
+
+A traditional, monolithic database approach would struggle to balance these conflicting requirements (e.g., fast text search vs. strict relational integrity). By deploying specialized databases, the system achieves optimal performance, scalability, and maintainability. This chapter focuses on the core platform components: Supabase, Redis, and Elasticsearch.
+
+\chapter{# 3.2 Supabase (Core Relational Database)}
+
+Supabase, built on top of PostgreSQL, serves as the primary relational database for the application's core logic.
+
+\chapter{## Structured Entities}
+Supabase is responsible for managing structured entities that require strong ACID (Atomicity, Consistency, Isolation, Durability) guarantees. This includes user authentication profiles, account settings, and primary metadata for job postings. The relational model ensures data integrity and enforces complex business rules through foreign key constraints and database triggers.
+
+\chapter{# 3.3 Redis (Session and Cache Management)}
+
+Redis is deployed as the high-speed, in-memory cache layer, critical for reducing latency and offloading repetitive tasks from the primary databases.
+
+\chapter{## Singleton Connection}
+Within the application, Redis connections are managed via a singleton pattern (\textit{}INLINE\textit{CODE}0\textit{}). This ensures efficient connection pooling and minimizes the overhead of establishing new TCP connections for every request.
+
+\chapter{## Core Caching Workloads}
+\begin{itemize}
+\item   \textbf{Authentication Management:} Redis is used for token blacklisting, ensuring that revoked JWTs are immediately invalidated across the distributed system.
+\item   \textbf{Job Tracking:} Background processing tasks (e.g., data scraping queues managed by BullMQ) rely on Redis to track job state and progress rapidly.
+\item   \textbf{Query Caching:} Frequently accessed, compute-intensive data (like trending skills or aggregate market statistics) are cached in Redis to improve dashboard load times.
+\end{itemize}
+
+\chapter{# 3.4 Elasticsearch (Full-Text Search Engine)}
+
+To power the core "job search" functionality, the system relies on Elasticsearch. Standard relational databases are not optimized for unstructured text search at scale.
+
+\chapter{## Data Synchronization}
+Job posting data is continuously synchronized from the primary Supabase database into Elasticsearch. This ensures the search index remains up-to-date while decoupling read-heavy search traffic from the transactional database.
+
+\chapter{## Advanced Mapping and Indexing}
+Elasticsearch indices are carefully mapped to support diverse search requirements:
+\begin{itemize}
+\item   \textbf{Keyword Mapping:} Fields requiring exact matches and aggregations (facets)—such as locations, job levels, and specific skill tags—are mapped as \textit{}INLINE\textit{CODE}1\textit{} types. This allows the frontend to quickly generate filter sidebars and facet counts.
+\item   \textbf{Text Mapping:} Large text blocks, specifically the job title (\textit{}INLINE\textit{CODE}2\textit{}) and job description, are mapped as \textit{}INLINE\textit{CODE}3\textit{}. The system applies standard text analyzers (including tokenization and lowercasing) to these fields, enabling robust full-text search, typo tolerance, and relevance scoring (TF-IDF/BM25).
+\end{itemize}

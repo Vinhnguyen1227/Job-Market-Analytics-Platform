@@ -2,23 +2,32 @@
 
 > **Project**: Job Market Analytics Platform ("CareerIntel")  
 > **Stack**: Next.js 16 + FastAPI + Ollama + Docker (Redis, MongoDB, Elasticsearch, Qdrant)  
-> **Purpose**: Map the entire codebase into thesis-ready chapters with file-level references and flow diagrams.
+> **Purpose**: Map the entire codebase into two separate thesis outlines while maintaining a unified project document.
 
 ---
 
 ## Table of Contents
 
-| # | Chapter | Est. Pages | Key Technologies |
-|---|---------|-----------|-----------------|
-| 1 | [System Architecture & Infrastructure](#chapter-1-system-architecture--infrastructure-docker-compose) | 3–4 | Docker Compose, Microservices |
-| 2 | [Data Acquisition Pipeline (Web Scraping)](#chapter-2-data-acquisition-pipeline-web-scraping) | 4–5 | Playwright, BullMQ, GitHub Actions |
-| 3 | [Data Layer & Polyglot Persistence](#chapter-3-data-layer--polyglot-persistence) | 4–5 | Supabase/PostgreSQL, MongoDB, Redis, Qdrant |
-| 4 | [Full-Text Search Engine](#chapter-4-full-text-search-engine-elasticsearch) | 3–4 | Elasticsearch 8.13, Vietnamese NLP helpers |
-| 5 | [Authentication & Authorization](#chapter-5-authentication--authorization) | 2–3 | Supabase Auth, JWT, Redis Blacklist, Middleware |
-| 6 | [Frontend Presentation Layer](#chapter-6-frontend-presentation-layer-nextjs) | 3–4 | Next.js App Router, SSR, React 19 |
-| 7 | [AI Chatbot Orchestrator (SLM Multi-Adapter)](#chapter-7-ai-chatbot-orchestrator-slm-multi-adapter-architecture) | 6–8 | FastAPI, Ollama, QLoRA Adapters, Celery, Qdrant |
-| 8 | [ML Training Pipeline (8-Phase QLoRA)](#chapter-8-ml-training-pipeline-8-phase-qlora-fine-tuning) | 5–7 | Gemini Synthesis, QLoRA, DPO, LLM-as-Judge |
-| | **Total** | **~30–40** | |
+### Thesis 1: AI Chatbot Orchestrator & ML Training Pipeline
+**Author**: User  
+| # | Chapter | Key Technologies | Focus Areas |
+|---|---------|-----------------|-------------|
+| 1 | [System Architecture (Shared)](#chapter-1-system-architecture--infrastructure-docker-compose-shared) | Docker, Microservices | Microservices context |
+| 3 | [Data Layer (AI Components)](#chapter-3-data-layer--polyglot-persistence-shared) | MongoDB, Supabase, Qdrant | MongoDB (Chat History), `user_resume_data` |
+| 6 | [Frontend AI Presentation Layer](#chapter-6-frontend-presentation-layer-nextjs-shared) | Next.js, React | `/ai` page, chat UI, async polling |
+| 7 | [AI Chatbot Orchestrator (SLM)](#chapter-7-ai-chatbot-orchestrator-slm-multi-adapter-architecture-thesis-1) | FastAPI, Ollama, Celery | Core Orchestrator logic, tool calling |
+| 8 | [ML Training Pipeline (8-Phase)](#chapter-8-ml-training-pipeline-8-phase-qlora-fine-tuning-thesis-1) | QLoRA, DPO, Gemini | Dataset generation, fine-tuning, benchmark |
+
+### Thesis 2: Core Platform, Search Engine & Data Acquisition
+**Author**: Partner  
+| # | Chapter | Key Technologies | Focus Areas |
+|---|---------|-----------------|-------------|
+| 1 | [System Architecture (Shared)](#chapter-1-system-architecture--infrastructure-docker-compose-shared) | Docker Compose | Container topology, infrastructure setup |
+| 2 | [Data Acquisition Pipeline](#chapter-2-data-acquisition-pipeline-web-scraping-thesis-2) | Playwright, GitHub Actions | Web scraping, data normalization |
+| 3 | [Core Data Layer & Persistence](#chapter-3-data-layer--polyglot-persistence-shared) | Supabase, Redis | Core tables, sessions, caches |
+| 4 | [Full-Text Search Engine](#chapter-4-full-text-search-engine-elasticsearch-thesis-2) | Elasticsearch 8.13 | Job search index, Vietnamese NLP |
+| 5 | [Authentication & Authorization](#chapter-5-authentication--authorization-thesis-2) | Supabase Auth, JWT | Identity, route protection |
+| 6 | [Core Frontend Layer](#chapter-6-frontend-presentation-layer-nextjs-shared) | Next.js App Router | Search, Profile, Home, UI Shell |
 
 ---
 
@@ -40,7 +49,7 @@ graph TB
     subgraph "Data Layer"
         PG["Supabase / PostgreSQL<br>(Users, Jobs, Profiles)"]
         ES["Elasticsearch 8.13<br>(Full-text Job Search)"]
-        REDIS["Redis<br>(Sessions, BullMQ, Cache)"]
+        REDIS["Redis<br>(Sessions, Cache)"]
         MONGO["MongoDB<br>(Chat History, GridFS)"]
         QDRANT["Qdrant<br>(Resume Vectors)"]
     end
@@ -75,7 +84,7 @@ graph TB
 
 ---
 
-## Chapter 1: System Architecture & Infrastructure (Docker Compose)
+## Chapter 1: System Architecture & Infrastructure (Docker Compose) [Shared]
 
 **Estimated pages: 3–4**
 
@@ -87,7 +96,7 @@ CareerIntel follows a **polyglot microservices architecture** orchestrated via D
 
 | Service | Image / Build | Port | Role |
 |---------|--------------|------|------|
-| `redis` | `redis:alpine` | 6379 | Session store, BullMQ broker, enum cache |
+| `redis` | `redis:alpine` | 6379 | Session store, enum cache |
 | `mongodb` | `mongo:latest` | 27017 | Chat history (Motor), GridFS (raw CVs) |
 | `elasticsearch` | `elasticsearch:8.13.0` | 9200 | Full-text job search index |
 | `qdrant` | `qdrant/qdrant:latest` | 6333 | Resume vector embeddings (BGE-M3) |
@@ -114,7 +123,7 @@ CareerIntel follows a **polyglot microservices architecture** orchestrated via D
 
 ---
 
-## Chapter 2: Data Acquisition Pipeline (Web Scraping)
+## Chapter 2: Data Acquisition Pipeline (Web Scraping) [Thesis 2]
 
 **Estimated pages: 4–5**
 
@@ -154,7 +163,7 @@ flowchart LR
 | [backend/scrap/scrap.ts](file:///d:/Job-Market-Analytics-Platform/backend/scrap/scrap.ts) | Shared scraper utilities & `checkJobExists` |
 | [backend/scrap/types.ts](file:///d:/Job-Market-Analytics-Platform/backend/scrap/types.ts) | TypeScript interfaces for scraped data |
 | [backend/jobs/github_action.ts](file:///d:/Job-Market-Analytics-Platform/backend/jobs/github_action.ts) | GitHub Actions entry point — orchestrates all 3 jobs |
-| [backend/jobs/queue.ts](file:///d:/Job-Market-Analytics-Platform/backend/jobs/queue.ts) | BullMQ worker for local development (Redis-backed) |
+| [backend/jobs/queue.ts](file:///d:/Job-Market-Analytics-Platform/backend/jobs/queue.ts) | Local worker for development |
 | [backend/jobs/cron.ts](file:///d:/Job-Market-Analytics-Platform/backend/jobs/cron.ts) | Cron scheduler for periodic scraping |
 | [python-ml-service/main.py](file:///d:/Job-Market-Analytics-Platform/python-ml-service/main.py) | FastAPI ML service for job normalization (4 phases) |
 | [python-ml-service/pipeline/](file:///d:/Job-Market-Analytics-Platform/python-ml-service/pipeline) | 4-phase normalization: clean → semantic → hash → upsert |
@@ -164,16 +173,17 @@ flowchart LR
 - **Playwright vs traditional scrapers** (Scrapy/BeautifulSoup) — why browser automation needed for JS-heavy Vietnamese job sites
 - **Anti-scraping countermeasures**: User-Agent spoofing, delay injection (10s between detail pages), proxy rotation strategy
 - **Two-pass scraping pattern**: listing page → individual detail pages (DOM evaluation)
-- **Data normalization pipeline** (python-ml-service): Phase 1 (regex cleaning) → Phase 2 (Gemini semantic normalization for tags/skills) → Phase 3 (content hashing for dedup) → Phase 4 (Supabase upsert)
+- **Data normalization pipeline** (python-ml-service): Phase 1 (regex cleaning) → Phase 2 (Semantic normalization for tags/skills using NLP/Regex) → Phase 3 (content hashing for dedup) → Phase 4 (Supabase upsert)
 - **Concurrency control**: `runWithConcurrency()` worker pool pattern for parallel N/A link checks
 - **Data freshness**: Expired job cleanup (DD/MM/YYYY parsing), dead link detection via HEAD requests
 - **CI/CD integration**: GitHub Actions workflow for daily automated scraping
 
 ---
 
-## Chapter 3: Data Layer & Polyglot Persistence
+## Chapter 3: Data Layer & Polyglot Persistence [Shared]
 
 **Estimated pages: 4–5**
+*(Note: Thesis 1 covers MongoDB and Qdrant + `user_resume_data` in Supabase. Thesis 2 covers core Supabase, Redis, and Elasticsearch.)*
 
 ### 3.1 Overview
 
@@ -184,7 +194,7 @@ The system uses **5 specialized databases**, each optimized for its data type �
 | Database | Use Case | Key Collections/Tables | Access Layer |
 |----------|----------|----------------------|-------------|
 | **Supabase (PostgreSQL)** | Users, profiles, jobs, CVs | `profiles`, `experiences`, `educations`, `skills`, `user_cvs`, `jobs` | `@supabase/supabase-js` + Service Role Key |
-| **Redis** | Sessions, job tracking, BullMQ, enum cache | `session:{id}`, `job:{id}`, `session:{id}:history` | `redis.asyncio` (Python), `ioredis` (TS) |
+| **Redis** | Sessions, job tracking, enum cache | `session:{id}`, `job:{id}`, `session:{id}:history` | `redis.asyncio` (Python), `ioredis` (TS) |
 | **MongoDB** | Chat history, CV file storage | `history`, `sessions`, GridFS | Motor (async), GridFS bucket |
 | **Elasticsearch** | Full-text job search | `jobs` index (keyword + text fields) | `@elastic/elasticsearch` (TS), Python async client |
 | **Qdrant** | Resume vector embeddings | `resumes` collection (4 named vectors per resume) | `qdrant-client` (Python) |
@@ -218,7 +228,7 @@ The system uses **5 specialized databases**, each optimized for its data type �
 
 ---
 
-## Chapter 4: Full-Text Search Engine (Elasticsearch)
+## Chapter 4: Full-Text Search Engine (Elasticsearch) [Thesis 2]
 
 **Estimated pages: 3–4**
 
@@ -285,7 +295,7 @@ flowchart LR
 
 ---
 
-## Chapter 5: Authentication & Authorization
+## Chapter 5: Authentication & Authorization [Thesis 2]
 
 **Estimated pages: 2–3**
 
@@ -339,9 +349,10 @@ sequenceDiagram
 
 ---
 
-## Chapter 6: Frontend Presentation Layer (Next.js)
+## Chapter 6: Frontend Presentation Layer (Next.js) [Shared]
 
 **Estimated pages: 3–4**
+*(Note: Thesis 1 focuses exclusively on the `/ai` chat interface and async polling patterns. Thesis 2 covers the core application shell, search interfaces, and profile management.)*
 
 ### 6.1 Overview
 
@@ -393,7 +404,7 @@ The frontend uses **Next.js 16 App Router** with a hybrid SSR + Client Component
 
 ---
 
-## Chapter 7: AI Chatbot Orchestrator (SLM Multi-Adapter Architecture)
+## Chapter 7: AI Chatbot Orchestrator (SLM Multi-Adapter Architecture) [Thesis 1]
 
 **Estimated pages: 6–8** *(Most complex chapter — core innovation)*
 
@@ -560,7 +571,7 @@ flowchart TB
 
 ---
 
-## Chapter 8: ML Training Pipeline (8-Phase QLoRA Fine-tuning)
+## Chapter 8: ML Training Pipeline (8-Phase QLoRA Fine-tuning) [Thesis 1]
 
 **Estimated pages: 5–7**
 

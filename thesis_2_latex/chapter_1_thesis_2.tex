@@ -1,0 +1,50 @@
+\chapter{Core Platform & Infrastructure Topology}
+
+\chapter{# 1.1 Overview}
+The foundation of the CareerIntel platform is a highly resilient, polyglot microservices architecture. Designed to integrate web scraping, full-text search, and real-time user interfaces, the infrastructure relies on Docker Compose to orchestrate seven concurrent containers. This topology ensures that the Next.js frontend, the Elasticsearch search engine, and the core PostgreSQL database operate seamlessly within a secure, internal software-defined network.
+
+\chapter{# 1.2 Core Platform Topology}
+The primary user-facing and data management layers of the application are supported by the following containerized services:
+\begin{itemize}
+\item \textbf{\textit{}INLINE\textit{CODE}0\textit{}}: The Next.js 16 (App Router) frontend serving both Server-Side Rendered (SSR) web pages and API routes (\textit{}INLINE\textit{CODE}1\textit{}). It acts as the primary gateway for users interacting with the job search interface and user profiles.
+\item \textbf{\textit{}INLINE\textit{CODE}2\textit{}}: An Elasticsearch 8.13.0 node optimized for complex full-text queries and faceted filtering, essential for querying thousands of normalized job postings.
+\item \textbf{\textit{}INLINE\textit{CODE}3\textit{}}: Operates as an in-memory session cache and handles rapid enumerations (e.g., job tracking state), utilizing the \textit{}INLINE\textit{CODE}4\textit{} library on the Next.js side.
+\item \textbf{\textit{}INLINE\textit{CODE}5\textit{}}: Provides document-based storage for flexible data schemas, utilized heavily by the Next.js API routes for managing user chat sessions via the \textit{}INLINE\textit{CODE}6\textit{}.
+\end{itemize}
+
+(Note: The core user and job data are persisted in a managed Supabase PostgreSQL instance, which the containerized services access securely via Service Role Keys).
+
+\chapter{# 1.3 Next.js Production Containerization}
+The \textit{}INLINE\textit{CODE}7\textit{} service is deployed using a highly optimized, multi-stage Dockerfile designed specifically for Node.js environments.
+
+\begin{enumerate}
+\item \textbf{Stage 1 (deps)}: Utilizes \textit{}INLINE\textit{CODE}8\textit{} and \textit{}INLINE\textit{CODE}9\textit{} to cleanly install dependencies, maximizing cache hits during the build process.
+\item \textbf{Stage 2 (builder)}: Compiles the React application. Telemetry is explicitly disabled (\textit{}INLINE\textit{CODE}10\textit{}) to prevent external analytics requests during CI/CD. The build outputs an optimized \textit{}INLINE\textit{CODE}11\textit{} standalone directory.
+\item \textbf{Stage 3 (runner)}: The final production image. It explicitly copies only the necessary compilation artifacts (\textit{}INLINE\textit{CODE}12\textit{}, \textit{}INLINE\textit{CODE}13\textit{}, \textit{}INLINE\textit{CODE}14\textit{}, \textit{}INLINE\textit{CODE}15\textit{}) from the builder stage. This drastically reduces the final attack surface and image size, establishing a secure environment configured tightly around \textit{}INLINE\textit{CODE}16\textit{}.
+\end{enumerate}
+
+\chapter{# 1.4 Database Health Probing & Startup Sequencing}
+In a distributed microservices environment, strict boot sequencing is mandatory to prevent cascade failures when upstream dependencies are unresponsive. CareerIntel implements comprehensive database health probing directly within the \textit{}INLINE\textit{CODE}17\textit{}.
+
+Services do not blindly depend on container startup; instead, they utilize the \textit{}INLINE\textit{CODE}18\textit{} configuration coupled with \textit{}INLINE\textit{CODE}19\textit{}.
+\begin{itemize}
+\item \textbf{Redis Health Check}: The container executes \textit{}INLINE\textit{CODE}20\textit{} every 10 seconds.
+\item \textbf{MongoDB Health Check}: The container executes \textit{}INLINE\textit{CODE}21\textit{} with a robust 20-second start period to account for disk initialization.
+\item \textbf{Elasticsearch Health Check}: A custom shell script polls the \textit{}INLINE\textit{CODE}22\textit{} HTTP endpoint, ensuring the internal state has achieved \textit{}INLINE\textit{CODE}23\textit{} or \textit{}INLINE\textit{CODE}24\textit{} status before accepting external traffic.
+\end{itemize}
+
+The Next.js and FastAPI application containers are instructed by Docker Compose to halt their startup procedures until these specific health conditions evaluate to true, guaranteeing a robust boot process.
+
+\chapter{# 1.5 Internal Docker DNS Service Discovery}
+To eliminate the fragility of hardcoded IP addresses and prevent the accidental exposure of internal databases to the public internet, the architecture leverages Docker's internal DNS resolver.
+
+All containers reside within a default bridge network. Consequently, services map to each other using their logical container names:
+\begin{itemize}
+\item The Next.js API connects to the Redis session store natively via \textit{}INLINE\textit{CODE}25\textit{}.
+\item The internal Elasticsearch sync scripts connect to the cluster via \textit{}INLINE\textit{CODE}26\textit{}.
+\end{itemize}
+
+This dynamic service discovery ensures that the backend topology remains secure; only the Next.js frontend (\textit{}INLINE\textit{CODE}27\textit{}), the Chatbot API (\textit{}INLINE\textit{CODE}28\textit{}), and Qdrant (\textit{}INLINE\textit{CODE}29\textit{}) are bound to the host interfaces, while the critical databases remain fully isolated within the Docker subnet.
+
+\chapter{# 1.6 Elasticsearch Configuration}
+The Elasticsearch container is explicitly configured for local development and integration within the microservices cluster. It is bootstrapped as a single node (\textit{}INLINE\textit{CODE}30\textit{}), removing the overhead of quorum elections. Furthermore, X-Pack security features are disabled (\textit{}INLINE\textit{CODE}31\textit{}) to streamline internal container-to-container communication without the friction of TLS and basic authentication management during the development phase. Finally, JVM memory limits are strictly enforced via environment variables (\textit{}INLINE\textit{CODE}32\textit{}) to prevent the Java heap from starving other containers of host RAM.

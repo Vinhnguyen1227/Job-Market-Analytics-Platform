@@ -1,0 +1,34 @@
+\chapter{Core Frontend Layer (Next.js)}
+
+\chapter{# 6.1 Overview}
+The core frontend of the CareerIntel platform is constructed using the Next.js 16 App Router architecture. This layer serves as the primary gateway for users, offering a cohesive application shell, robust job search interfaces, and comprehensive profile management tools. This chapter details the foundational frontend architecture, focusing on server-side rendering strategies for authentication, the URL-driven state of faceted search interfaces, and the offloading of Vietnamese Natural Language Processing (NLP) to the client.
+
+\chapter{# 6.2 SSR Data Fetching and User-Aware Rendering}
+Next.js 16 introduces a clear delineation between Server Components and Client Components. The application leverages Server Components as the default execution environment, heavily optimizing Time to Interactive (TTI) and securing the authentication flow.
+
+To render personalized content based on the user's authentication state, Server-Side Rendering (SSR) data fetching is deeply integrated with Supabase. The application utilizes a server-side Supabase client instantiated via \textit{}INLINE\textit{CODE}0\textit{}. This client intercepts the incoming HTTP request in the Node.js runtime, reads the secure, HttpOnly JWT cookies, and validates the user session before emitting any HTML to the browser.
+This architectural choice allows protected routes, such as the \textit{}INLINE\textit{CODE}1\textit{} page, to be fully hydrated with the user's specific data (experiences, education, skills) on the server. This eliminates the "flash of unauthenticated content" typical of Single Page Applications (SPAs) and enhances security by preventing client-side interception of raw tokens.
+
+\chapter{# 6.3 Faceted Search Architecture}
+The job search interface, located at \textit{}INLINE\textit{CODE}2\textit{}, provides users with an Elasticsearch-powered faceted search experience. Managing the complex state of numerous interdependent filters requires a robust state management strategy.
+
+\chapter{## 6.3.1 URL-Driven State Management}
+Instead of relying on isolated React state (\textit{}INLINE\textit{CODE}3\textit{} or Redux), the search interface anchors its state entirely to the browser's URL query parameters via Next.js's \textit{}INLINE\textit{CODE}4\textit{}.
+When a user interacts with the custom \textit{}INLINE\textit{CODE}5\textit{} component (e.g., selecting "Ho Chi Minh City" and "Senior Level"), the client component immediately updates the URL. This mutation triggers a shallow route update, prompting a \textit{}INLINE\textit{CODE}6\textit{} hook to serialize the parameters and invoke the \textit{}INLINE\textit{CODE}7\textit{} API endpoint.
+
+\textit{}CODE\textit{BLOCK}0\textit{}
+
+This architecture ensures that complex search queries are entirely linkable, shareable, and resilient to page reloads, maintaining a stateless and predictable data flow.
+
+\chapter{# 6.4 Client-Side Vietnamese NLP Processing}
+While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
+
+\chapter{## 6.4.1 Location and Geographic Parsing}
+Job postings on Vietnamese platforms frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a \textit{}INLINE\textit{CODE}8\textit{} parser utilizing a predefined dictionary of valid geographic entities and localized regex patterns. It cleans extraneous prefixes, splits the string based on delimeters, and matches fragments against known cities, accurately mapping unstructured text into deterministic location facets for Elasticsearch.
+
+\chapter{## 6.4.2 Unstructured Salary Categorization}
+Salary information poses a significant parsing challenge, often appearing as free text such as "15 - 20 Triệu", "Lên đến 1000$", or "Thoả thuận". The frontend utilizes a \textit{}INLINE\textit{CODE}9\textit{} function executing heuristic regex matching.
+This parser identifies numeric ranges, ignores foreign currencies via specific exclusion patterns, standardizes values into millions of VND, and mathematically evaluates the bounds (\textit{}INLINE\textit{CODE}10\textit{}) against predefined salary tiers. This transforms free text into indexable categorizations like "10 – 20 triệu" without requiring a backend round-trip.
+
+\chapter{## 6.4.3 Experience Tier Mapping}
+Similarly, the \textit{}INLINE\textit{CODE}11\textit{} parser processes strings like "Dưới 1 năm" or "2-5 tháng". It converts all parsed numeric values into a standardized yearly metric and determines intersection overlaps with predefined experience tiers (e.g., "1 – 2 năm"). By executing these deterministic parsers directly in the browser's JavaScript engine, the frontend remains highly responsive while ensuring data conforms strictly to the schema expected by the Elasticsearch backend.
