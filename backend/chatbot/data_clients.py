@@ -20,25 +20,24 @@ from qdrant_client import QdrantClient as QdrantClientLib
 logger = logging.getLogger(__name__)
 
 
-# Salary buckets used by the scraper / index (millions VND).
+# Salary buckets used by the ES sync pipeline (helpers.ts SALARY_RANGES).
+# These labels MUST match what sync.ts indexes — see backend/elasticsearch/helpers.ts.
 SALARY_BUCKETS = [
-    "Dưới 10 triệu",
-    "10 - 15 triệu",
-    "15 - 20 triệu",
-    "20 - 25 triệu",
-    "25 - 30 triệu",
-    "30 - 50 triệu",
+    "0 – 3 triệu",
+    "3 – 5 triệu",
+    "5 – 10 triệu",
+    "10 – 20 triệu",
+    "20 – 50 triệu",
     "Trên 50 triệu",
     "Thỏa thuận",
 ]
 
 BUCKET_RANGES = [
-    (0, 10, "Dưới 10 triệu"),
-    (10, 15, "10 - 15 triệu"),
-    (15, 20, "15 - 20 triệu"),
-    (20, 25, "20 - 25 triệu"),
-    (25, 30, "25 - 30 triệu"),
-    (30, 50, "30 - 50 triệu"),
+    (0, 3, "0 – 3 triệu"),
+    (3, 5, "3 – 5 triệu"),
+    (5, 10, "5 – 10 triệu"),
+    (10, 20, "10 – 20 triệu"),
+    (20, 50, "20 – 50 triệu"),
     (50, 200, "Trên 50 triệu"),
 ]
 

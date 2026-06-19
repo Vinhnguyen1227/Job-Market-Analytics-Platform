@@ -1,51 +1,242 @@
 \chapter{Polyglot Persistence and Search Infrastructure}
 
+\section{Overview}
 This chapter outlines the core data architecture of the Job Market Analytics Platform. Managing diverse data types—ranging from highly structured user profiles to massive, unstructured job postings—requires a specialized approach. The system adopts a polyglot persistence strategy, utilizing five distinct databases (Supabase, Redis, MongoDB, Elasticsearch, and Qdrant), each selected to optimally address specific data shapes and access patterns.
 
-\chapter{# 3.1 Polyglot Persistence Justification}
+This chapter focuses on the three core platform components: \textbf{Supabase} (relational), \textbf{Redis} (caching and security), and \textbf{Elasticsearch} (full-text search). MongoDB and Qdrant are covered in the companion thesis (Thesis 1) as they primarily serve the AI Chatbot subsystem.
 
-The platform handles several distinct data workloads:
-\begin{enumerate}
-\item  \textbf{Relational Data:} User accounts, authentication, and structured relationships (e.g., user-to-job applications).
-\item  \textbf{Search Data:} Millions of text-heavy job descriptions requiring complex full-text search and facet filtering.
-\item  \textbf{Ephemeral/Cache Data:} High-speed session tokens, background job tracking, and frequent query results.
-\item  \textbf{Unstructured Chat Data:} Dynamic, schema-less chatbot conversation logs (handled via MongoDB).
-\item  \textbf{Vector Data:} Semantic embeddings for AI-driven skill matching (handled via Qdrant).
-\end{enumerate}
+\section{Polyglot Persistence Justification}
 
-A traditional, monolithic database approach would struggle to balance these conflicting requirements (e.g., fast text search vs. strict relational integrity). By deploying specialized databases, the system achieves optimal performance, scalability, and maintainability. This chapter focuses on the core platform components: Supabase, Redis, and Elasticsearch.
+The platform handles several distinct data workloads that impose conflicting requirements on a database system:
 
-\chapter{# 3.2 Supabase (Core Relational Database)}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|l|}
+        \hline
+        \textbf{Workload} & \textbf{Access Pattern} & \textbf{Consistency Requirement} & \textbf{Optimal Database Type} \\
+        \hline
+        User accounts \& profiles & Relational joins, ACID transactions & Strong consistency & PostgreSQL (Supabase) \\
+        \hline
+        Job search queries & Full-text search, faceted aggregations & Eventual consistency & Elasticsearch \\
+        \hline
+        Session tokens \& cache & Sub-millisecond reads, automatic expiry & Best-effort & Redis \\
+        \hline
+        Chat conversation logs & Schema-less document appends & Eventual consistency & MongoDB \\
+        \hline
+        Resume embeddings & Approximate nearest neighbor search & Eventual consistency & Qdrant \\
+        \hline
+    \end{tabular}
+    \caption{Data Workloads and Optimal Databases}
+    \label{tab:workloads}
+\end{table}
+
+\subsection{Why Not a Monolithic Database?}
+
+A traditional, monolithic PostgreSQL approach was initially considered. However, the following trade-offs became evident:
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|p{0.2\textwidth}|p{0.35\textwidth}|p{0.35\textwidth}|}
+        \hline
+        \textbf{Criteria} & \textbf{Monolithic PostgreSQL} & \textbf{Polyglot Architecture} \\
+        \hline
+        \textbf{Full-text search} & \texttt{ILIKE} / \texttt{tsvector} — limited fuzzy search, no faceted aggregations & Elasticsearch BM25 with native facets \\
+        \hline
+        \textbf{Session caching} & Disk-based I/O per session lookup & Redis in-memory at sub-millisecond latency \\
+        \hline
+        \textbf{Vector similarity} & \texttt{pgvector} extension — single-node, limited indexing algorithms & Qdrant HNSW with named vector support \\
+        \hline
+        \textbf{Schema flexibility} & Rigid schema migrations for chat logs & MongoDB schemaless document appends \\
+        \hline
+        \textbf{Operational complexity} & Single database, simple operations & 5 databases, requires health checks and sync pipelines \\
+        \hline
+    \end{tabular}
+    \caption{Monolithic vs Polyglot Architecture Trade-offs}
+    \label{tab:monolithic_vs_polyglot}
+\end{table}
+
+The polyglot approach trades operational complexity for optimized performance at each data access layer. The key architectural decision is to designate \textbf{Supabase as the single source of truth} and treat all other databases as \textbf{read-optimized replicas or caches}, following the Command Query Responsibility Segregation (CQRS) pattern.
+
+\section{Supabase (Core Relational Database)}
 
 Supabase, built on top of PostgreSQL, serves as the primary relational database for the application's core logic.
 
-\chapter{## Structured Entities}
-Supabase is responsible for managing structured entities that require strong ACID (Atomicity, Consistency, Isolation, Durability) guarantees. This includes user authentication profiles, account settings, and primary metadata for job postings. The relational model ensures data integrity and enforces complex business rules through foreign key constraints and database triggers.
+\subsection{Structured Entities}
+Supabase is responsible for managing structured entities that require strong ACID (Atomicity, Consistency, Isolation, Durability) guarantees. The relational model ensures data integrity and enforces complex business rules through foreign key constraints.
 
-\chapter{# 3.3 Redis (Session and Cache Management)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_3_thesis_2_diagram_1.pdf}
+    \caption{Entity Relationship Diagram of Supabase Structured Data}
+    \label{fig:chapter_3_diagram_1}
+\end{figure}
 
-Redis is deployed as the high-speed, in-memory cache layer, critical for reducing latency and offloading repetitive tasks from the primary databases.
-
-\chapter{## Singleton Connection}
-Within the application, Redis connections are managed via a singleton pattern (\textit{}INLINE\textit{CODE}0\textit{}). This ensures efficient connection pooling and minimizes the overhead of establishing new TCP connections for every request.
-
-\chapter{## Core Caching Workloads}
+\subsection{Dual-Client Architecture}
+The application maintains two distinct Supabase client configurations to enforce access control separation:
 \begin{itemize}
-\item   \textbf{Authentication Management:} Redis is used for token blacklisting, ensuring that revoked JWTs are immediately invalidated across the distributed system.
-\item   \textbf{Job Tracking:} Background processing tasks (e.g., data scraping queues managed by BullMQ) rely on Redis to track job state and progress rapidly.
-\item   \textbf{Query Caching:} Frequently accessed, compute-intensive data (like trending skills or aggregate market statistics) are cached in Redis to improve dashboard load times.
+    \item \textbf{Browser Client} (\texttt{@supabase/supabase-js}): Uses the public Anon Key, subject to Row Level Security (RLS) policies. Used for user-facing operations.
+    \item \textbf{Server Client} (\texttt{@supabase/ssr}): Uses the Service Role Key, bypassing RLS. Used for administrative operations (scraper data ingestion, batch normalization).
 \end{itemize}
 
-\chapter{# 3.4 Elasticsearch (Full-Text Search Engine)}
+\section{Redis (Session, Cache, and Security Layer)}
 
-To power the core "job search" functionality, the system relies on Elasticsearch. Standard relational databases are not optimized for unstructured text search at scale.
+Redis is deployed as the high-speed, in-memory cache layer, serving three critical roles in the architecture: session management, query caching, and security enforcement.
 
-\chapter{## Data Synchronization}
-Job posting data is continuously synchronized from the primary Supabase database into Elasticsearch. This ensures the search index remains up-to-date while decoupling read-heavy search traffic from the transactional database.
+\subsection{Singleton Connection Pattern}
+Within the application, Redis connections are managed via a \textbf{global singleton pattern} (\texttt{globalForRedis}). This approach prevents connection multiplication during Next.js hot-module-reload (HMR) cycles in development, where module re-imports would otherwise create a new TCP connection per reload. In production (\texttt{NODE\_ENV=production}), the singleton is not cached globally since HMR is not active.
 
-\chapter{## Advanced Mapping and Indexing}
+\subsection{Redis Key Space Architecture}
+
+The codebase employs structured key naming conventions with appropriate TTL strategies:
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|l|}
+        \hline
+        \textbf{Key Pattern} & \textbf{Purpose} & \textbf{TTL} & \textbf{Module} \\
+        \hline
+        \texttt{rate\_limit:\{ip\}:\{window\}} & Fixed-window rate limiting & \texttt{windowSeconds + 10} & \texttt{redisSecurity.ts} \\
+        \hline
+        \texttt{blacklist:\{sha256\_hash\}} & JWT revocation on logout & Matches JWT \texttt{exp} claim & \texttt{redisSecurity.ts} \\
+        \hline
+        \texttt{session:\{id\}} & Chatbot session state & 24 hours & \texttt{session\_store.py} \\
+        \hline
+        \texttt{session:\{id\}:history} & Chat history sync buffer & 24 hours & \texttt{session\_store.py} \\
+        \hline
+        \texttt{job:\{id\}} & Async CV processing job status & 1 hour & \texttt{job\_tracker.py} \\
+        \hline
+    \end{tabular}
+    \caption{Redis Key Naming Conventions}
+    \label{tab:redis_keys}
+\end{table}
+
+\subsection{Core Workloads}
+\begin{itemize}
+    \item \textbf{Authentication Security}: Redis handles both \textbf{JWT blacklisting} (SHA-256 hash with TTL matching token expiry) and \textbf{rate limiting} (Fixed Window Counter algorithm at 50 requests per 60 seconds per IP). These are detailed in Chapter 5.
+    \item \textbf{Job Tracking}: Background processing tasks for CV extraction rely on Redis to track job state and progress with sub-millisecond updates.
+    \item \textbf{Enum Caching}: Frequently accessed Elasticsearch aggregation results (cities, experience buckets, work types, categories) are cached in the server's RAM via the \texttt{EnumCache} class, with periodic async refresh from Elasticsearch every 3,600 seconds.
+\end{itemize}
+
+\section{Elasticsearch (Full-Text Search Engine)}
+
+To power the core "job search" functionality, the system relies on Elasticsearch 8.13.0. Standard relational databases are not optimized for unstructured text search at scale.
+
+\subsection{CQRS Data Flow}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_3_thesis_2_diagram_2.pdf}
+    \caption{CQRS Data Flow to Elasticsearch}
+    \label{fig:chapter_3_diagram_2}
+\end{figure}
+
+\subsection{Data Synchronization}
+Job posting data is synchronized from Supabase into Elasticsearch via a batch pipeline (\texttt{npm run es:sync}). The sync script employs a \textbf{full-rebuild strategy}: it deletes and recreates the entire index on each run, then re-indexes all records. While this approach is less efficient than incremental sync, it guarantees index consistency and eliminates stale-document accumulation. The pipeline processes records in paginated batches of 500, ordered by \texttt{created\_at} descending (newest first), and applies in-memory URL-based deduplication via a JavaScript \texttt{Set}.
+
+\subsection{Advanced Mapping and Indexing}
 Elasticsearch indices are carefully mapped to support diverse search requirements:
-\begin{itemize}
-\item   \textbf{Keyword Mapping:} Fields requiring exact matches and aggregations (facets)—such as locations, job levels, and specific skill tags—are mapped as \textit{}INLINE\textit{CODE}1\textit{} types. This allows the frontend to quickly generate filter sidebars and facet counts.
-\item   \textbf{Text Mapping:} Large text blocks, specifically the job title (\textit{}INLINE\textit{CODE}2\textit{}) and job description, are mapped as \textit{}INLINE\textit{CODE}3\textit{}. The system applies standard text analyzers (including tokenization and lowercasing) to these fields, enabling robust full-text search, typo tolerance, and relevance scoring (TF-IDF/BM25).
-\end{itemize}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|l|}
+        \hline
+        \textbf{Field} & \textbf{ES Type} & \textbf{Analyzer} & \textbf{Purpose} \\
+        \hline
+        \texttt{url} & \texttt{keyword} & — & Unique document ID \\
+        \hline
+        \texttt{tieu\_de} & \texttt{text} & \texttt{standard} & Job title full-text search (boosted $\times$3) \\
+        \hline
+        \texttt{cong\_ty} & \texttt{text} & \texttt{standard} & Company name search (boosted $\times$2) \\
+        \hline
+        \texttt{cities} & \texttt{keyword} & — & Location faceted filter (63 provinces/cities) \\
+        \hline
+        \texttt{categories} & \texttt{keyword} & — & Industry domain faceted filter (66 domains) \\
+        \hline
+        \texttt{workTypes} & \texttt{keyword} & — & Work type faceted filter \\
+        \hline
+        \texttt{levels} & \texttt{keyword} & — & Seniority level faceted filter \\
+        \hline
+        \texttt{expBuckets} & \texttt{keyword} & — & Experience tier faceted filter (4 ranges) \\
+        \hline
+        \texttt{salaryBuckets} & \texttt{keyword} & — & Salary tier faceted filter (6 ranges) \\
+        \hline
+        \texttt{created\_at} & \texttt{date} & — & Temporal ordering \\
+        \hline
+        \texttt{raw\_data} & \texttt{object (enabled: false)} & — & Full job document stored but NOT indexed \\
+        \hline
+    \end{tabular}
+    \caption{Elasticsearch Field Mapping Strategy}
+    \label{tab:es_mapping}
+\end{table}
+
+The \texttt{raw\_data} field uses \texttt{enabled: false} to store the original job JSON without indexing its internal contents. This significantly saves system resources (RAM, CPU, disk) during indexing while retaining all data for retrieval — the frontend reads job details directly from \texttt{raw\_data} without requiring a secondary query to Supabase.
+
+\section{Technology Choice: Elasticsearch vs Alternatives}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|p{0.2\textwidth}|p{0.2\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.2\textwidth}|}
+        \hline
+        \textbf{Criteria} & \textbf{Elasticsearch 8.13} & \textbf{Typesense} & \textbf{Meilisearch} & \textbf{PostgreSQL Full-Text} \\
+        \hline
+        \textbf{Relevance algorithm} & BM25 (default since v5) & TF-IDF variant & Proximity-based & \texttt{ts\_rank} with \texttt{tsvector} \\
+        \hline
+        \textbf{Faceted aggregations} & Native \texttt{terms} aggregations & Native facets & Native facets & \texttt{GROUP BY} (expensive at scale) \\
+        \hline
+        \textbf{Fuzzy search} & Levenshtein edit distance (\texttt{fuzziness: AUTO}) & Typo tolerance (1-2 chars) & Typo tolerance (built-in) & \texttt{ILIKE} / trigram similarity \\
+        \hline
+        \textbf{Vietnamese NLP} & Standard analyzer (tokenization, lowercasing) & No built-in CJK support & No built-in CJK support & \texttt{simple}/\texttt{pg\_trgm} dictionaries \\
+        \hline
+        \textbf{Deployment} & Docker official image & Single binary & Single binary & Built into Supabase \\
+        \hline
+        \textbf{Scalability} & Horizontal sharding & Vertical scaling & Vertical scaling & Connection-limited \\
+        \hline
+        \textbf{Ecosystem} & Mature (REST API, Kibana) & Lightweight & Lightweight & Native PostgreSQL \\
+        \hline
+        \textbf{Memory usage} & \textasciitilde 512 MB (JVM heap) & \textasciitilde 50 MB & \textasciitilde 50 MB & Shared with main DB \\
+        \hline
+    \end{tabular}
+    \caption{Search Engine Technology Comparison}
+    \label{tab:search_engines}
+\end{table}
+
+Elasticsearch was selected for its mature ecosystem, native Docker support, powerful \texttt{bool} query DSL, and production-proven aggregation capabilities. Its BM25 relevance scoring provides superior search quality compared to PostgreSQL's basic full-text capabilities, which is critical for a job search platform processing thousands of Vietnamese-language postings.
+
+\section{Key Quantitative Metrics}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Metric} & \textbf{Value} \\
+        \hline
+        Total databases in polyglot architecture & 5 (Supabase, Redis, Elasticsearch, MongoDB, Qdrant) \\
+        \hline
+        Core databases (Thesis 2 scope) & 3 (Supabase, Redis, Elasticsearch) \\
+        \hline
+        Supabase tables & 7 (\texttt{profiles}, \texttt{experiences}, \texttt{educations}, \texttt{skills}, \texttt{user\_cvs}, \texttt{jobs}, \texttt{user\_resume\_data}) \\
+        \hline
+        Redis key patterns & 5 distinct naming conventions \\
+        \hline
+        Redis rate limit threshold & 50 requests / 60 seconds / IP \\
+        \hline
+        EnumCache TTL & 3,600 seconds (1 hour) \\
+        \hline
+        ES index fields & 10 mapped fields + 1 stored-only (\texttt{raw\_data}) \\
+        \hline
+        ES sync batch size & 500 records per Supabase fetch \\
+        \hline
+        ES JVM heap allocation & 512 MB initial / 512 MB maximum \\
+        \hline
+        Geographic entities (cities) & 63 entries (61 provinces + "Toàn quốc" + "Nước ngoài") \\
+        \hline
+        Industry domain categories & 66 standardized categories \\
+        \hline
+        Salary buckets & 6 ranges (0–3, 3–5, 5–10, 10–20, 20–50, 50+ triệu VND) \\
+        \hline
+        Experience buckets & 4 ranges (< 1, 1–2, 2–5, 5+ years) \\
+        \hline
+    \end{tabular}
+    \caption{Database Infrastructure Metrics}
+    \label{tab:chapter_3_metrics}
+\end{table}

@@ -1,71 +1,157 @@
 \chapter{Data Acquisition Pipeline (Web Scraping)}
 
-\chapter{# 2.1 Overview}
-The Job Market Analytics Platform employs a robust, automated data acquisition pipeline designed to harvest, normalize, and persist job postings from major Vietnamese recruitment portals. The pipeline primarily targets TopCV and JobOKO, utilizing Playwright (headless Chromium) to handle JavaScript-heavy DOM rendering. This architecture is orchestrated via a daily GitHub Actions cron job, ensuring a continuous influx of fresh job data directly into the Supabase (PostgreSQL) data layer.
+\section{Overview}
+The Job Market Analytics Platform employs a robust, automated data acquisition pipeline designed to harvest, normalize, and persist job postings from major Vietnamese recruitment portals. The pipeline primarily targets TopCV and JobOKO, utilizing Playwright (headless Chromium) to handle JavaScript-heavy DOM rendering. This architecture is orchestrated via a GitHub Actions cron job running every three days (cron: \texttt{0 19 */3 * *}, corresponding to 02:00 AM Vietnam time), ensuring a continuous influx of fresh job data directly into the Supabase (PostgreSQL) data layer. The workflow also supports manual triggering via \texttt{workflow\_dispatch} for on-demand data refresh.
 
-\chapter{# 2.2 Scraping Architecture and CI/CD Integration}
-The entry point for the data acquisition pipeline is \textit{}INLINE\textit{CODE}0\textit{}, which is triggered by a daily GitHub Actions cron schedule. This automation ensures the platform's dataset remains current without requiring manual intervention.
+\section{Scraping Architecture and CI/CD Integration}
+The entry point for the data acquisition pipeline is \texttt{backend/jobs/github\_action.ts}, which is triggered by the GitHub Actions cron schedule every three days. This automation ensures the platform's dataset remains current without requiring manual intervention.
 
-\chapter{## Technical Flow}
+\subsection{CI/CD Dual-Runtime Pipeline}
+The GitHub Actions workflow orchestrates a multi-language pipeline, installing both \textbf{Node.js 22} (for the Playwright scrapers) and \textbf{Python 3.11} (for the offline normalization service) within a single CI run. The pipeline timeout is set to \textbf{150 minutes} to accommodate the sequential scraping of multiple sources with rate-limiting delays.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_2_thesis_2_diagram_1.pdf}
+    \caption{CI/CD Scraping Pipeline Workflow}
+    \label{fig:chapter_2_diagram_1}
+\end{figure}
+
+\subsection{Technical Flow}
 \begin{enumerate}
-\item \textbf{Initialization}: The process begins by validating Supabase Service Role Keys, establishing a secure connection that bypasses Row Level Security (RLS) policies for administrative ingestion.
-\item \textbf{Scraping Sources}:
-\end{enumerate}
-   - \textbf{JobOKO} (\textit{}INLINE\textit{CODE}1\textit{}): Configured dynamically via environment variables (e.g., \textit{}INLINE\textit{CODE}2\textit{}, delay \textit{}INLINE\textit{CODE}3\textit{}), this scraper systematically traverses both listing and detail pages.
-   - \textbf{TopCV} (\textit{}INLINE\textit{CODE}4\textit{}): Employs a more sophisticated, two-pass scraping pattern using Playwright to handle dynamic content.
-\begin{enumerate}
-\item \textbf{Direct Upsert}: Data extracted by the scrapers is immediately persisted into the Supabase \textit{}INLINE\textit{CODE}5\textit{} table using an \textit{}INLINE\textit{CODE}6\textit{} operation, keyed on the unique job \textit{}INLINE\textit{CODE}7\textit{}. To optimize CI runtimes, data normalization is intentionally bypassed during the scraping phase and deferred to an offline worker (\textit{}INLINE\textit{CODE}8\textit{} or the Python ML Service).
+    \item \textbf{Initialization}: The process begins by validating Supabase Service Role Keys, establishing a secure connection that bypasses Row Level Security (RLS) policies for administrative ingestion.
+    \item \textbf{Scraping Sources}:
+    \begin{itemize}
+        \item \textbf{JobOKO} (\texttt{scrapeJoboko}): Configured dynamically via environment variables. The scraper delay is set to \texttt{3000ms} in the CI environment (via \texttt{SCRAPER\_DELAY\_MS}), though local development defaults to \texttt{7000ms} for more conservative rate limiting.
+        \item \textbf{TopCV} (\texttt{scrapeTopCV}): Employs a more sophisticated, two-pass scraping pattern using Playwright to handle dynamic content (323 lines of scraper logic).
+    \end{itemize}
+    \item \textbf{Direct Upsert}: Data extracted by the scrapers is immediately persisted into the Supabase \texttt{jobs} table using an \texttt{upsert} operation, keyed on the unique job \texttt{url}. To optimize CI runtimes, data normalization is intentionally bypassed during the scraping phase and deferred to an offline Python script (\texttt{fix\_khac\_offline.py}). This script runs within the same CI job but as a separate step, because the FastAPI ML Service is not started in the CI environment — it is intended for local development or future production deployment.
 \end{enumerate}
 
-\chapter{# 2.3 Playwright vs Traditional Scrapers}
-Modern recruitment portals like TopCV rely heavily on client-side JavaScript for rendering job listings dynamically. Traditional scraping tools (such as BeautifulSoup or Scrapy) operate on raw HTML and frequently fail to parse these dynamic Document Object Models (DOM). To overcome this, the platform utilizes Playwright's headless Chromium browser (\textit{}INLINE\textit{CODE}9\textit{}, \textit{}INLINE\textit{CODE}10\textit{}), which executes the JavaScript and evaluates the DOM only after it has been fully rendered.
+\section{Playwright vs Traditional Scrapers}
+Modern recruitment portals like TopCV rely heavily on client-side JavaScript for rendering job listings dynamically. Traditional scraping tools (such as BeautifulSoup or Scrapy) operate on raw HTML and frequently fail to parse these dynamic Document Object Models (DOM). To overcome this, the platform utilizes Playwright's headless Chromium browser (\texttt{--no-sandbox}, \texttt{--disable-setuid-sandbox}), which executes the JavaScript and evaluates the DOM only after it has been fully rendered.
 
-\chapter{## Anti-Scraping Countermeasures}
-To ensure reliable extraction and avoid IP bans, the \textit{}INLINE\textit{CODE}11\textit{} implementation incorporates several evasion strategies:
+\subsection{Technology Choice: Playwright vs Alternatives}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|l|l|}
+        \hline
+        \textbf{Criteria} & \textbf{Playwright} & \textbf{Puppeteer} & \textbf{Selenium} & \textbf{Scrapy / BeautifulSoup} \\
+        \hline
+        \textbf{JS rendering} & Full Chromium engine & Full Chromium engine & Full browser engines & None (static HTML only) \\
+        \hline
+        \textbf{Language support} & Node.js, Python, Java, C\# & Node.js only & All major languages & Python only \\
+        \hline
+        \textbf{Multi-browser} & Chromium, Firefox, WebKit & Chromium only & Chrome, Firefox, Edge, Safari & N/A \\
+        \hline
+        \textbf{CI/CD support} & Native (\texttt{npx playwright install}) & Requires manual binary setup & Requires WebDriver binary management & Built-in (no browser needed) \\
+        \hline
+        \textbf{Auto-wait} & Built-in smart waits & Manual \texttt{waitForSelector} & Explicit WebDriverWait & N/A \\
+        \hline
+        \textbf{Headless performance} & \textasciitilde 200 MB per context & \textasciitilde 200 MB per context & \textasciitilde 300 MB per instance & \textasciitilde 20 MB (no browser) \\
+        \hline
+    \end{tabular}
+    \caption{Scraping Technology Comparison}
+    \label{tab:playwright_vs_alternatives}
+\end{table}
+
+Playwright was selected over Puppeteer for its superior multi-language support (enabling potential migration to Python scrapers in the future), native CI/CD integration, and built-in auto-wait mechanisms that simplify scraping JavaScript-rendered pages.
+
+\subsection{Anti-Scraping Countermeasures}
+To ensure reliable extraction and avoid IP bans, the \texttt{scrap\_topcv.ts} implementation incorporates several evasion strategies:
 \begin{itemize}
-\item \textbf{User-Agent Spoofing}: The scraper simulates a legitimate user by mimicking a Chrome 120 browser operating on Windows 10.
-\item \textbf{Delay Injection}: Aggressive rate limiting is applied. The system introduces an 8-second delay before querying listing pages, and a 2.5 to 10-second delay between individual detail page crawls.
-\item \textbf{Two-Pass Scraping}:
+    \item \textbf{User-Agent Spoofing}: The scraper simulates a legitimate user by mimicking a Chrome 120 browser operating on Windows 10 via the \texttt{User-Agent} header.
+    \item \textbf{Accept-Language Header}: The scraper sets \texttt{Accept-Language: vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7}, signaling to the target server that the request originates from a Vietnamese-language browser. This reduces the likelihood of being flagged by geographic anomaly detection systems.
+    \item \textbf{Delay Injection}: Aggressive rate limiting is applied. The system introduces an 8-second delay before querying listing pages to allow dynamic content to fully render. Between individual detail page crawls, a fixed 10-second delay is enforced to prevent triggering rate-limit thresholds on the target server.
+    \item \textbf{Two-Pass Scraping}:
+    \begin{itemize}
+        \item \textit{Pass 1 (Listing)}: Extracts high-level metadata (title, URL, company name, salary, location, and logo) from search result pages, filtering out duplicate URLs in-memory using a JavaScript \texttt{Set}.
+        \item \textit{Pass 2 (Detail)}: Iterates over the deduplicated URLs, opens individual pages, waits for DOM readiness (2.5 seconds), and extracts deep content (full description, requirements, benefits, and expiration date) using heuristic DOM traversal techniques.
+    \end{itemize}
 \end{itemize}
-  - \textit{Pass 1 (Listing)}: Extracts high-level metadata (title, URL, company name, salary, location, and logo) from search result pages, filtering out duplicate URLs in-memory using a JavaScript \textit{}INLINE\textit{CODE}12\textit{}.
-  - \textit{Pass 2 (Detail)}: Iterates over the deduplicated URLs, opens individual pages, waits for DOM readiness, and extracts deep content (full description, requirements, benefits, and expiration date) using heuristic DOM traversal techniques.
 
-\chapter{# 2.4 Concurrency Control and Data Freshness}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_2_thesis_2_diagram_2.pdf}
+    \caption{Two-Pass Scraping Flow for Dynamic Content}
+    \label{fig:chapter_2_diagram_2}
+\end{figure}
+
+\section{Concurrency Control and Data Freshness}
 Managing thousands of network requests requires strict concurrency limits to prevent connection timeouts and avoid overwhelming target servers.
 
 \begin{itemize}
-\item \textbf{Worker Pool Pattern (\textit{}INLINE\textit{CODE}13\textit{})}: The pipeline utilizes a robust concurrency limit pattern, capping active workers (e.g., 10 concurrent workers for link checking). Workers independently request the next task from the pool upon completion, which is more efficient than batching with \textit{}INLINE\textit{CODE}14\textit{} and prevents isolated timeouts from stalling the entire queue.
-\item \textbf{Expired Jobs Cleanup}: To maintain data relevance, a maintenance script periodically fetches URLs with specific expiration dates (parsed from \textit{}INLINE\textit{CODE}15\textit{} strings). These dates are compared against the current date, and expired records are purged in batches of 50 to minimize load on the Supabase Postgres instance.
-\item \textbf{N/A Links Verification}: For job postings without an explicit expiration date (marked as 'N/A'), the system verifies the survival of the listing by dispatching HTTP requests to the URL. Dead links are subsequently batch-deleted from the database.
+    \item \textbf{Worker Pool Pattern (\texttt{runWithConcurrency})}: The pipeline utilizes a robust concurrency limit pattern, capping active workers at 10 concurrent requests for link checking. Workers independently request the next task from the pool upon completion, which is more efficient than batching with \texttt{Promise.all} and prevents isolated timeouts from stalling the entire queue. Each worker independently captures its own result (fulfilled or rejected), ensuring fault isolation.
+    \item \textbf{Expired Jobs Cleanup}: To maintain data relevance, a maintenance job periodically fetches all records with explicit expiration dates (parsed from \texttt{DD/MM/YYYY} strings). These dates are compared against the current date, and expired records are purged in batches of 50 to minimize load on the Supabase Postgres instance. The batch size of 50 is chosen to comply with Supabase's \texttt{.in()} filter constraint, which limits the number of elements in a single filter predicate.
+    \item \textbf{N/A Links Verification}: For job postings without an explicit expiration date (marked as 'N/A'), the system verifies the survival of the listing by dispatching HTTP requests to the URL via the \texttt{checkJobExists} function. Dead links are subsequently batch-deleted from the database in groups of 50.
 \end{itemize}
 
-\chapter{# 2.5 Architecture Flow Diagram}
-The following diagram illustrates the flow of data from the initial cron trigger through scraping, persistence, and offline maintenance:
+\section{Data Normalization Pipeline}
 
-\textit{}CODE\textit{BLOCK}0\textit{}
+While the primary scraping mechanism persists raw data directly to the database to optimize ingestion speed, the platform implements a robust, secondary offline processing pipeline to standardize and enrich this data. This normalization process is executed by a dedicated Python Machine Learning Service (334 lines), designed as a four-phase Extract, Transform, Load (ETL) pipeline.
 
-\chapter{# 2.6 Data Normalization Pipeline}
-
-While the primary scraping mechanism persists raw data directly to the database to optimize ingestion speed, the platform implements a robust, secondary offline processing pipeline to standardize and enrich this data. This normalization process is executed by a dedicated Python Machine Learning Service via a FastAPI backend, designed as a four-phase Extract, Transform, Load (ETL) pipeline.
-
-\chapter{## 2.6.1 Phase 1: Pattern-Based Cleansing}
+\subsection{Phase 1: Pattern-Based Cleansing}
 The initial phase addresses common structural anomalies inherent in scraped text. Utilizing targeted regular expressions, the system cleanses mandatory fields such as company names and geographical locations, stripping out irrelevant characters, errant whitespace, and inconsistent formatting to establish a baseline of clean string data.
 
-\chapter{## 2.6.2 Phase 2: Semantic Normalization and Feature Extraction}
+\subsection{Phase 2: Semantic Normalization and Feature Extraction}
 The core of the data enrichment process leverages a hybrid approach combining artificial intelligence with rule-based heuristics.
 \begin{itemize}
-\item \textbf{Job Title Standardization}: Regular expressions are applied to isolate the core professional title by removing promotional prefixes (e.g., "Urgent," "Seeking") and descriptive suffixes detailing salary or urgency.
-\item \textbf{Categorization}: The pipeline maps diverse job listings into 66 predefined industry domains. It primarily utilizes the Gemini AI model to semantically categorize the job based on its description and context. To ensure reliability against API rate limits or service unavailability, a fallback rule-based system is implemented, which traverses the title and description against a comprehensive keyword map.
-\item \textbf{Skill Extraction}: The system parses unstructured job descriptions to identify and extract up to ten specific professional skills. This is achieved using Gemini AI configured for constrained JSON output generation. Similar to categorization, a keyword-matching heuristic against a predefined skill dictionary serves as a secondary fallback.
+    \item \textbf{Job Title Standardization}: Regular expressions are applied to isolate the core professional title by removing promotional prefixes (e.g., "Tuyển gấp," "Cần tuyển") and descriptive suffixes detailing salary or urgency.
+    \item \textbf{Categorization}: The pipeline maps diverse job listings into \textbf{66 predefined industry domains} (defined in the \texttt{CORE\_DOMAINS} dictionary, spanning from "An toàn lao động" to "Sinh viên / Thực tập sinh"). It primarily utilizes the \textbf{Gemini 2.5 Flash} AI model to semantically categorize the job based on its description and context. To ensure reliability against API rate limits or service unavailability, a fallback rule-based system is implemented, which traverses the title and description against a comprehensive keyword map of \textbf{95+ keyword-to-domain mappings}. The Gemini API calls employ \textbf{exponential backoff} (2s $\rightarrow$ 4s $\rightarrow$ 8s) with a maximum of 3 retries for rate-limited responses.
+    \item \textbf{Skill Extraction}: The system parses unstructured job descriptions to identify and extract up to ten specific professional skills. This is achieved using Gemini AI configured for constrained JSON output generation (\texttt{response\_mime\_type="application/json"}). The rule-based fallback maintains a dictionary of \textbf{60+ professional skills} spanning office tools, programming languages, soft skills, and industry-specific competencies.
 \end{itemize}
 
-\chapter{## 2.6.3 Phase 3: Deterministic Content Hashing}
+\subsection{Phase 3: Deterministic Content Hashing}
 To facilitate absolute deduplication beyond simple URL collisions, the pipeline generates a deterministic hash identifier for each job. This hash is computed based on the normalized company name, the cleaned job title, and the standardized location, ensuring that identical postings from different source URLs are accurately identified and consolidated.
 
-\chapter{## 2.6.4 Phase 4: Persistence}
+\subsection{Phase 4: Persistence}
 In the final phase, the pipeline assembles the finalized payload, integrating the original fields with the newly computed normalized data and extracted skills. This enriched dataset is then persisted to the PostgreSQL data layer using an upsert operation, updating existing records and inserting new ones seamlessly.
 
-\chapter{## 2.6.5 Normalization Flow Diagram}
+\subsection{Normalization Flow Diagram}
 The following diagram visualizes the flow of data through the four phases of the normalization pipeline:
 
-\textit{}CODE\textit{BLOCK}1\textit{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_2_thesis_2_diagram_3.pdf}
+    \caption{Four-Phase Normalization Pipeline}
+    \label{fig:chapter_2_diagram_3}
+\end{figure}
+
+\section{Key Quantitative Metrics}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Metric} & \textbf{Value} \\
+        \hline
+        Scraper source files & 8 files, \textasciitilde 77 KB total \\
+        \hline
+        TopCV scraper complexity & 323 lines \\
+        \hline
+        JobOKO scraper complexity & 516 lines \\
+        \hline
+        Industry domains (Phase 2) & 66 categories \\
+        \hline
+        Keyword-to-domain mappings & 95+ entries \\
+        \hline
+        Skill extraction dictionary & 60+ professional skills \\
+        \hline
+        CI/CD pipeline timeout & 150 minutes \\
+        \hline
+        Cron schedule & Every 3 days at 02:00 VN \\
+        \hline
+        Concurrency limit (link checking) & 10 workers \\
+        \hline
+        Batch delete size & 50 records \\
+        \hline
+        Listing page delay & 8,000 ms \\
+        \hline
+        Detail page inter-crawl delay & 10,000 ms \\
+        \hline
+        Gemini retry strategy & 3 attempts, exponential backoff (2s, 4s, 8s) \\
+        \hline
+    \end{tabular}
+    \caption{Data Acquisition Quantitative Metrics}
+    \label{tab:chapter_2_metrics}
+\end{table}

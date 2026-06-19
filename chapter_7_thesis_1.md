@@ -262,7 +262,7 @@ The Celery application is configured with Redis as both broker and result backen
 
 The most significant performance optimization in the async pipeline is the **pre-warmup strategy** for machine learning models at worker startup. When a Celery worker process initializes, the `worker_process_init` signal triggers a warmup function that eagerly loads the PhoBERT NER model and the BGE-M3 embedding model, then runs a single dummy inference pass through each. This dummy pass triggers PyTorch's JIT compilation and CUDA kernel caching (if GPU is available), ensuring that the first real CV upload does not incur the approximately 50-second cold-start penalty associated with initial model loading.
 
-The warmup function operates on lazy-initialized pipeline singletons: the `SemanticExtractionPipeline` (Phase 3) and `ValidationStoragePipeline` (Phase 4) objects are created once per worker process and reused across all subsequent task invocations. The NER component processes a short Vietnamese sentence ("Nguyễn Văn A làm việc tại FPT Software") to prime the tokenizer and model weights, while the embedding model encodes the string "warmup" to load its dense retrieval parameters.
+The warmup function operates on lazy-initialized pipeline singletons: the `SemanticExtractionPipeline` (Phase 2) and `ValidationStoragePipeline` (Phase 3) objects are created once per worker process and reused across all subsequent task invocations. The NER component processes a short Vietnamese sentence ("Nguyễn Văn A làm việc tại FPT Software") to prime the tokenizer and model weights, while the embedding model encodes the string "warmup" to load its dense retrieval parameters.
 
 ### 7.6.3 File Parsing
 
@@ -272,17 +272,17 @@ The Dockerfile for the chatbot service explicitly installs `tesseract-ocr` and `
 
 ### 7.6.4 Heuristic Section Splitting
 
-Between file parsing and Phase 3 semantic chunking, the pipeline bridge performs a critical preprocessing step: **heuristic section splitting** that replaces the Phase 2 layout analysis component of the training pipeline. The full ML training pipeline (Chapter 8) includes a dedicated Phase 2 for layout analysis, but the real-time chatbot deployment bypasses this phase to avoid its computational overhead. Instead, the bridge applies a set of 11 compiled regular expression patterns that match common CV section headings in both Vietnamese and English, including "Kinh nghiệm làm việc" / "Work Experience," "Học vấn" / "Education," "Kỹ năng" / "Skills," "Dự án" / "Projects," and others.
+Between file parsing and Phase 2 semantic chunking, the pipeline bridge performs a critical preprocessing step: **heuristic section splitting** that replaces the layout analysis component originally planned for the training pipeline. The real-time chatbot deployment bypasses dedicated layout analysis to avoid its computational overhead. Instead, the bridge applies a set of 11 compiled regular expression patterns that match common CV section headings in both Vietnamese and English, including "Kinh nghiệm làm việc" / "Work Experience," "Học vấn" / "Education," "Kỹ năng" / "Skills," "Dự án" / "Projects," and others.
 
 The section splitter processes the raw text line by line. Each line is stripped of trailing colons and whitespace, then tested against the 11 section patterns. When a pattern matches, a new section bucket is created with the corresponding semantic label, and subsequent lines are accumulated into that bucket. Lines preceding the first detected heading are assigned to the `personal_info` section by default, capturing name, email, phone number, and other contact information that typically appears at the top of a CV without an explicit heading.
 
-### 7.6.5 Phase 3 and Phase 4 Execution
+### 7.6.5 Phase 2 and Phase 3 Execution
 
-The bridge invokes the training pipeline's Phase 3 (`SemanticExtractionPipeline`) and Phase 4 (`ValidationStoragePipeline`) components by dynamically loading their source modules using Python's `importlib.util.spec_from_file_location`. This approach is necessitated by the fact that the phase directories contain spaces in their names ("phase 3-semantic chunking") and both contain files named `pipeline.py`, which would create import conflicts under standard Python import resolution. The bridge explicitly registers each module under a disambiguated name (`phase3_pipeline`, `phase4_pipeline`) before executing them.
+The bridge invokes the training pipeline's Phase 2 (`SemanticExtractionPipeline`) and Phase 3 (`ValidationStoragePipeline`) components by dynamically loading their source modules using Python's `importlib.util.spec_from_file_location`. This approach is necessitated by the fact that the phase directories contain spaces in their names and both contain files named `pipeline.py`, which would create import conflicts under standard Python import resolution. The bridge explicitly registers each module under disambiguated names before executing them.
 
-Phase 3 execution follows three steps: the `SemanticChunker` receives the section dictionary and produces a list of `Chunk` objects, the `RegexExtractor` applies pattern-based entity extraction (emails, phone numbers, dates), and the optional `NERExtractor` (PhoBERT-based, controlled by the `CHATBOT_USE_NER` environment variable) identifies additional Vietnamese named entities. Entities from both extractors are merged at the chunk level and assembled into a `CanonicalResume` data structure.
+Phase 2 execution follows three steps: the `SemanticChunker` receives the section dictionary and produces a list of `Chunk` objects, the `RegexExtractor` applies pattern-based entity extraction (emails, phone numbers, dates), and the optional `NERExtractor` (PhoBERT-based, controlled by the `CHATBOT_USE_NER` environment variable) identifies additional Vietnamese named entities. Entities from both extractors are merged at the chunk level and assembled into a `CanonicalResume` data structure.
 
-Phase 4 execution validates the canonical resume, generates BGE-M3 vector embeddings for four named dimensions (overall summary, skills, experience, and education), and upserts the result into the Qdrant `resumes` collection with a unique point ID. The point ID and quality score (computed by the multi-criteria `QualityScorer`) are returned to the Celery task for downstream use.
+Phase 3 execution validates the canonical resume, generates BGE-M3 vector embeddings for four named dimensions (full_profile, skills, experience, and education), and upserts the result into the Qdrant `resumes` collection with a unique point ID. The point ID and quality score (computed by the multi-criteria `QualityScorer`) are returned to the Celery task for downstream use.
 
 ### 7.6.6 Job Tracking and Result Binding
 
@@ -305,9 +305,9 @@ flowchart TB
         WORKER["process_cv_task"] --> WARMUP["Models pre-warmed<br>at worker startup"]
         WARMUP --> PARSE["pipeline_bridge.parse_file()<br>PyMuPDF / python-docx / OCR"]
         PARSE --> SECTION["Heuristic section split<br>(11 regex patterns)"]
-        SECTION --> P3["Phase 3: SemanticChunker<br>+ Regex + NER extraction"]
-        P3 --> P4["Phase 4: Validate<br>+ BGE-M3 Embed<br>+ Qdrant Store"]
-        P4 --> RESULT["Update Redis: COMPLETED<br>+ resume_dict payload"]
+        SECTION --> P2["Phase 2: SemanticChunker<br>+ Regex + NER extraction"]
+        P2 --> P3["Phase 3: Validate<br>+ BGE-M3 Embed<br>+ Qdrant Store"]
+        P3 --> RESULT["Update Redis: COMPLETED<br>+ resume_dict payload"]
         RESULT --> BIND_SESSION["Bind resume to session<br>(Redis + MongoDB dual-write)"]
         RESULT --> BIND_SUPABASE["Persist to Supabase<br>(user_resume_data)"]
     end

@@ -1,72 +1,138 @@
 \chapter{Full-Text Search Engine (Elasticsearch)}
 
-\chapter{# 4.1 Search Architecture & Rationale}
+\section{Search Architecture \& Rationale}
 
 Building a job search system requires the ability to handle complex text queries, faceted filtering, and fast response times. In the initial phase, a relational database system (PostgreSQL via Supabase) was used as the primary data source. However, as the data volume grew and search requirements became more complex, this architecture revealed several limitations:
 
 \begin{itemize}
-\item \textbf{Limitations of SQL}: Full-text search queries or \textit{}INLINE\textit{CODE}0\textit{} operators in PostgreSQL are not optimized for natural language search, especially when handling spelling errors and relevance scoring.
-\item \textbf{Faceted Aggregations}: Dynamically calculating filter categories (e.g., counting the number of jobs per city or salary range) consumes a lot of resources if executed directly on SQL using complex \textit{}INLINE\textit{CODE}1\textit{} clauses.
+    \item \textbf{Limitations of SQL}: Full-text search queries or \texttt{ILIKE} operators in PostgreSQL are not optimized for natural language search, especially when handling spelling errors and relevance scoring. PostgreSQL's \texttt{tsvector} / \texttt{tsquery} system lacks native Vietnamese language support and provides limited relevance tuning compared to specialized search engines.
+    \item \textbf{Faceted Aggregations}: Dynamically calculating filter categories (e.g., counting the number of jobs per city or salary range) consumes a lot of resources if executed directly on SQL using complex \texttt{GROUP BY} clauses. Each unique filter combination requires a separate query, leading to N+1 aggregation overhead.
 \end{itemize}
 
 To resolve these issues, the system architecture adopts the Command Query Responsibility Segregation (CQRS) pattern:
 \begin{itemize}
-\item \textbf{Supabase (PostgreSQL)} acts as the "Source of Truth" (Transactional Database), storing the original data after scraping and normalization.
-\item \textbf{Elasticsearch 8.13} is used as a "Read-only Index" (Analytical Database), dedicated to processing search queries and filtering data for the frontend and AI Chatbot. The Elasticsearch system is deployed as a single-node cluster via Docker (\textit{}INLINE\textit{CODE}2\textit{} on port 9200), ensuring lightning-fast search capabilities and multi-language support.
+    \item \textbf{Supabase (PostgreSQL)} acts as the "Source of Truth" (Transactional Database), storing the original data after scraping and normalization.
+    \item \textbf{Elasticsearch 8.13} is used as a "Read-only Index" (Analytical Database), dedicated to processing search queries and filtering data for the frontend and AI Chatbot. The Elasticsearch system is deployed as a single-node cluster via Docker (\texttt{elasticsearch:8.13.0} on port 9200), ensuring lightning-fast search capabilities and multi-language support.
 \end{itemize}
 
-\chapter{# 4.2 Index Schema & Mapping Strategies}
+\section{Index Schema \& Mapping Strategies}
 
-To optimize Elasticsearch for both relevance scoring and exact filtering, the index structure (\textit{}INLINE\textit{CODE}3\textit{}) is meticulously designed within the data synchronization configuration file.
+To optimize Elasticsearch for both relevance scoring and exact filtering, the index structure (\texttt{jobs}) is meticulously designed within the data synchronization configuration file.
 
 Two main data type strategies are used:
 \begin{enumerate}
-\item \textbf{Keyword Mapping}: Applied to fields that require exact match filtering and aggregations, such as \textit{}INLINE\textit{CODE}4\textit{}, \textit{}INLINE\textit{CODE}5\textit{}, \textit{}INLINE\textit{CODE}6\textit{}, \textit{}INLINE\textit{CODE}7\textit{}, \textit{}INLINE\textit{CODE}8\textit{}, \textit{}INLINE\textit{CODE}9\textit{}, and \textit{}INLINE\textit{CODE}10\textit{}. The \textit{}INLINE\textit{CODE}11\textit{} type allows Elasticsearch to build optimal data structures for directly searching original text structures.
-\item \textbf{Text Mapping}: Applied to fields that require relevance scoring, such as \textit{}INLINE\textit{CODE}12\textit{} (job title) and \textit{}INLINE\textit{CODE}13\textit{} (company name), using the default \textit{}INLINE\textit{CODE}14\textit{} analyzer.
+    \item \textbf{Keyword Mapping}: Applied to fields that require exact match filtering and aggregations, such as \texttt{url}, \texttt{cities} (63 geographic entities), \texttt{categories} (66 industry domains), \texttt{workTypes}, \texttt{levels}, \texttt{expBuckets} (4 tiers), and \texttt{salaryBuckets} (6 ranges). The \texttt{keyword} type allows Elasticsearch to build optimal data structures (inverted index on exact terms) for directly searching original text structures without tokenization.
+    \item \textbf{Text Mapping}: Applied to fields that require relevance scoring, such as \texttt{tieu\_de} (job title) and \texttt{cong\_ty} (company name), using the default \texttt{standard} analyzer. The standard analyzer performs Unicode-aware tokenization, lowercasing, and stop word removal, enabling BM25-based relevance ranking.
 \end{enumerate}
 
-\textbf{Optimizing the "Document Store" with \textit{}INLINE\textit{CODE}15\textit{}}:
-Instead of extracting every detail of the job for indexing, the \textit{}INLINE\textit{CODE}16\textit{} field is configured as an \textit{}INLINE\textit{CODE}17\textit{} type with the \textit{}INLINE\textit{CODE}18\textit{} option. This option instructs Elasticsearch to store the original JSON string of the job without indexing its internal contents.
-This approach significantly saves system resources (RAM, CPU, disk space) during the indexing process while retaining all the data. When a search query returns results, the frontend can immediately retrieve detailed job data from \textit{}INLINE\textit{CODE}19\textit{} without needing an additional query to Supabase for the information.
+\textbf{Optimizing the "Document Store" with \texttt{enabled: false}}:
+Instead of extracting every detail of the job for indexing, the \texttt{raw\_data} field is configured as an \texttt{object} type with the \texttt{enabled: false} option. This option instructs Elasticsearch to store the original JSON string of the job without indexing its internal contents.
+This approach significantly saves system resources (RAM, CPU, disk space) during the indexing process while retaining all the data. When a search query returns results, the frontend can immediately retrieve detailed job data from \texttt{raw\_data} without needing an additional query to Supabase for the information.
 
-\chapter{# 4.3 Data Ingestion & Deduplication Pipeline (Sync Flow)}
+\section{Data Ingestion \& Deduplication Pipeline (Sync Flow)}
 
-Data is updated from Supabase to Elasticsearch via a batch synchronization pipeline. This process is triggered by a Node.js script (\textit{}INLINE\textit{CODE}20\textit{}).
+Data is updated from Supabase to Elasticsearch via a batch synchronization pipeline. This process is triggered by a Node.js script (\texttt{sync.ts}).
+
+The sync pipeline employs a \textbf{full-rebuild strategy}: the existing index is deleted and recreated on each run, ensuring zero stale-document accumulation. While this is less efficient than incremental sync for very large datasets, it guarantees index consistency and eliminates the need for complex change-detection logic.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_4_thesis_2_diagram_1.pdf}
+    \caption{Elasticsearch Batch Synchronization Pipeline}
+    \label{fig:chapter_4_diagram_1}
+\end{figure}
 
 \begin{enumerate}
-\item \textbf{Batch Fetching}: The system fetches data from Supabase in paginated batches (500 records per batch) based on chronological order (\textit{}INLINE\textit{CODE}21\textit{}). Breaking the data down into batches helps prevent memory overflow.
-\item \textbf{Memory-Resident Deduplication}: To avoid data duplication before pushing to Elasticsearch, an in-memory \textit{}INLINE\textit{CODE}22\textit{} data structure (RAM) is used to track URLs that have already appeared (\textit{}INLINE\textit{CODE}23\textit{}). If the URL is missing, a composite key made from \textit{}INLINE\textit{CODE}24\textit{} and \textit{}INLINE\textit{CODE}25\textit{} is used as the identifier.
-\item \textbf{Bulk API}: The deduplicated data is then converted into the ES Document format (via the \textit{}INLINE\textit{CODE}26\textit{} function) and pushed in bulk using the \textit{}INLINE\textit{CODE}27\textit{} API. This execution method exponentially improves write speeds compared to sequentially writing individual documents using the \textit{}INLINE\textit{CODE}28\textit{} command. These operations are executed with the \textit{}INLINE\textit{CODE}29\textit{} option to ensure that new data is searchable immediately after the sync completes.
+    \item \textbf{Batch Fetching}: The system fetches data from Supabase in paginated batches (500 records per batch) ordered by \texttt{created\_at} descending (newest first). Breaking the data down into batches helps prevent memory overflow.
+    \item \textbf{Memory-Resident Deduplication}: To avoid data duplication before pushing to Elasticsearch, an in-memory \texttt{Set} data structure (RAM) is used to track records that have already appeared. The primary deduplication key is the job URL. If the URL is missing, a composite key in the format \texttt{\$\{tieu\_de\}-\$\{cong\_ty\}} (title-company) is used as the fallback identifier.
+    \item \textbf{Normalization Transform}: Each job record passes through five normalization functions (\texttt{splitLocations}, \texttt{getSalaryBuckets}, \texttt{getExpBuckets}, \texttt{getWorkTypeTags}, \texttt{getLevels}) that convert unstructured Vietnamese text into standardized keyword facets.
+    \item \textbf{Bulk API}: The deduplicated and normalized data is pushed using the \texttt{\_bulk} API, which exponentially improves write speeds compared to sequentially writing individual documents. These operations are executed with the \texttt{refresh: true} option to ensure that new data is searchable immediately after the sync completes.
 \end{enumerate}
 
-\chapter{# 4.4 Vietnamese NLP & Heuristic Normalization Logic}
+\section{Vietnamese NLP \& Heuristic Normalization Logic}
 
-Due to the unstructured nature of Vietnamese job postings, an internal library (\textit{}INLINE\textit{CODE}30\textit{}) was built to extract and normalize data through Heuristic and Regex techniques prior to indexing:
+Due to the unstructured nature of Vietnamese job postings, an internal library (\texttt{helpers.ts}, 152 lines) was built to extract and normalize data through Heuristic and Regex techniques prior to indexing:
 
 \begin{itemize}
-\item \textbf{Location Parsing}: Raw location strings (e.g., "Nơi làm việc: Hà Nội, Tp. HCM") are stripped of unnecessary prefixes, split by commas, and matched against a static array of 63 provinces/cities (\textit{}INLINE\textit{CODE}31\textit{}). The system applies Regex for noise filtering when job title keywords (such as "chuyên viên", "trưởng phòng") are mistakenly identified as locations.
-\item \textbf{Salary Bucketing}: Foreign currency salaries (USD, JPY) are ignored. The system uses Regex to extract number ranges (e.g., "10 - 15 triệu"), removes commas, converts them to floating-point decimals representing millions of VND, and classifies them into fixed income ranges (0-3, 3-5, 5-10, 10-20, 20-50, Over 50 million).
-\item \textbf{Experience Parsing}: Text regarding experience (e.g., "dưới 1 năm", "trên 5 năm", or ranges like "1 - 2 năm") is scanned and normalized into a time range value in years. It is then assigned to static experience buckets (Under 1 year, 1-2 years, 2-5 years, Over 5 years).
-\item \textbf{Work Types}: English slang or mixed Vietnamese keywords (e.g., "full-time", "part-time", "thời vụ", "wfh") are mapped to standard tags such as "Toàn thời gian" (Full-time), "Bán thời gian" (Part-time), "Làm tại nhà" (Work from home).
+    \item \textbf{Location Parsing (\texttt{splitLocations})}: Raw location strings (e.g., "Nơi làm việc: Hà Nội, Tp. HCM") are stripped of unnecessary prefixes, split by commas, and matched against a static array of \textbf{63 provinces/cities} (\texttt{CITY\_PATTERNS}). The system applies Regex for noise filtering when job title keywords (such as "chuyên viên", "trưởng phòng") are mistakenly identified as locations. Notably, the parser implements a \textbf{negative lookbehind regex} \texttt{(?<!Bà Rịa) - (?!Vũng Tàu)} to prevent incorrectly splitting the compound province name "Bà Rịa - Vũng Tàu" on the hyphen delimiter — a critical edge case in Vietnamese geographic parsing.
+
+    \item \textbf{Salary Bucketing (\texttt{getSalaryBuckets})}: Foreign currency salaries are filtered out using a comprehensive regex matching \textbf{17 international currency codes} (USD, EUR, GBP, JPY, SGD, AUD, CAD, HKD, KRW, THB, MYR, INR, CNY, RMB, TWD, CZK, CHF). For VND salaries, the system uses Regex to extract number ranges (e.g., "10 - 15 triệu"), removes commas, converts them to floating-point decimals representing millions of VND, and classifies them into 6 fixed income ranges: 0–3, 3–5, 5–10, 10–20, 20–50, and over 50 million VND.
+
+    \item \textbf{Experience Parsing (\texttt{getExpBuckets})}: Text regarding experience (e.g., "dưới 1 năm", "trên 5 năm", or ranges like "1 - 2 năm") is scanned and normalized into a time range value in years. Month-based values (e.g., "2-5 tháng") are automatically converted to years by dividing by 12. It is then assigned to 4 static experience buckets: Under 1 year, 1–2 years, 2–5 years, Over 5 years.
+
+    \item \textbf{Work Types (\texttt{getWorkTypeTags})}: English slang or mixed Vietnamese keywords (e.g., "full-time", "part-time", "thời vụ", "wfh", "hybrid") are mapped to 5 standard tags: "Toàn thời gian" (Full-time), "Bán thời gian" (Part-time), "Thực tập" (Internship), "Thời vụ" (Contract), "Làm tại nhà" (Remote/WFH).
 \end{itemize}
 
-\chapter{# 4.5 Multi-Field Search & Relevance Tuning}
+\section{Multi-Field Search \& Relevance Tuning}
 
-When a search command is received from the AI Chatbot, the query is constructed via the Python async Elasticsearch client (\textit{}INLINE\textit{CODE}32\textit{}) using the \textit{}INLINE\textit{CODE}33\textit{} Query DSL.
+When a search command is received from the AI Chatbot or the frontend API, the query is constructed via the Python async Elasticsearch client (\texttt{data\_clients.py}) using the \texttt{bool} Query DSL.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_4_thesis_2_diagram_2.pdf}
+    \caption{Elasticsearch bool Query Construction}
+    \label{fig:chapter_4_diagram_2}
+\end{figure}
 
 \begin{enumerate}
-\item \textbf{Relevance Scoring (Must Clause)}: If the user provides a \textit{}INLINE\textit{CODE}34\textit{}, the query uses the \textit{}INLINE\textit{CODE}35\textit{} command with the \textit{}INLINE\textit{CODE}36\textit{} option. The job title (\textit{}INLINE\textit{CODE}37\textit{}) is weighted with a multiplier of 3 (\textit{}INLINE\textit{CODE}38\textit{}), while the company name (\textit{}INLINE\textit{CODE}39\textit{}) receives a weight multiplier of 2 (\textit{}INLINE\textit{CODE}40\textit{}). The \textit{}INLINE\textit{CODE}41\textit{} feature is enabled to tolerate minor spelling errors in Vietnamese.
-\item \textbf{Strict Filtering (Filter Clauses)}: Optional parameters such as location, salary, and experience are passed in as \textit{}INLINE\textit{CODE}42\textit{} filters, instructing the engine to strictly match the content against the defined \textit{}INLINE\textit{CODE}43\textit{} types.
-\item \textbf{Salary Resolution}: When given an input range for desired salary (\textit{}INLINE\textit{CODE}44\textit{} to \textit{}INLINE\textit{CODE}45\textit{}), the algorithm automatically identifies salary buckets that overlap with the request and injects them into the query as a list of valid keywords.
-\item \textbf{Client-side Highlight}: If a user searches by location, the returned payload within \textit{}INLINE\textit{CODE}46\textit{} is automatically adjusted by moving the queried city to the top of the \textit{}INLINE\textit{CODE}47\textit{} list, which helps the frontend interface and AI better assess visual priority.
+    \item \textbf{Relevance Scoring (Must Clause)}: If the user provides a \texttt{keyword}, the query uses the \texttt{multi\_match} command with the \texttt{best\_fields} option. The job title (\texttt{tieu\_de}) is weighted with a multiplier of 3 (\texttt{\textasciicircum3}), while the company name (\texttt{cong\_ty}) receives a weight multiplier of 2 (\texttt{\textasciicircum2}). The \texttt{fuzziness: AUTO} feature enables Levenshtein edit-distance tolerance, allowing 0 edits for terms 1–2 characters, 1 edit for 3–5 characters, and 2 edits for 6+ characters. This handles common typos but is not Vietnamese-specific NLP — it operates at the character level.
+    \item \textbf{Strict Filtering (Filter Clauses)}: Optional parameters such as location, salary, and experience are passed in as \texttt{terms} filters, instructing the engine to strictly match the content against the defined \texttt{keyword} types. Filter clauses do not affect relevance scoring and are cached by Elasticsearch for performance.
+    \item \textbf{Salary Resolution}: When given an input range for desired salary (\texttt{min\_salary} to \texttt{max\_salary}), the algorithm automatically identifies all salary buckets that overlap with the request and injects them into the query as a list of valid keywords. For example, a request for 8–15 million VND would resolve to buckets "5 – 10 triệu" and "10 – 20 triệu".
+    \item \textbf{City Prioritization}: If a user searches by location, the returned payload within \texttt{raw\_data} is automatically adjusted by moving the queried city to the top of the \texttt{cities} list. This reordering helps the frontend interface and AI better assess visual priority when displaying multiple locations.
+    \item \textbf{Source Filtering}: The \texttt{\_source} field is restricted to \texttt{["raw\_data"]} only, avoiding the transfer of redundant indexed fields in the response payload.
 \end{enumerate}
 
-\chapter{# 4.6 Aggregation & Memory-Resident Enum Caching}
+\section{Aggregation \& Memory-Resident Enum Caching}
 
 To build a UI filtering experience or to provide a valid set of parameters for the AI Chatbot's Tool Calling process, the system needs to know the available filter values (e.g., which cities currently have job postings).
 
 \begin{itemize}
-\item \textbf{Elasticsearch Aggregations}: The client sends queries with a size of 0 (\textit{}INLINE\textit{CODE}48\textit{}) requesting \textit{}INLINE\textit{CODE}49\textit{} to group distinct attributes (\textit{}INLINE\textit{CODE}50\textit{}, \textit{}INLINE\textit{CODE}51\textit{}).
-\item \textbf{EnumCache Pattern}: To avoid constantly sending Aggregation queries that consume Elasticsearch resources, the \textit{}INLINE\textit{CODE}52\textit{} class (\textit{}INLINE\textit{CODE}53\textit{}) maintains these lists directly in the server's memory (RAM) with a Time-To-Live (TTL) of 3600 seconds (1 hour).
-\item \textbf{Async Background Refresh}: The cache refresh process runs as a background task via \textit{}INLINE\textit{CODE}54\textit{} (\textit{}INLINE\textit{CODE}55\textit{}). Therefore, any GET request from the frontend or Pydantic Validator from the Chatbot can retrieve these data tags in sub-millisecond times thanks to synchronous properties (\textit{}INLINE\textit{CODE}56\textit{}), significantly improving the application's overall response speed.
+    \item \textbf{Elasticsearch Aggregations}: The client sends queries with a size of 0 (\texttt{size: 0}) requesting \texttt{terms aggregations} to group distinct attributes (\texttt{distinct\_cities} up to 1,000 buckets, \texttt{distinct\_categories} up to 500 buckets).
+    \item \textbf{EnumCache Pattern}: To avoid constantly sending Aggregation queries that consume Elasticsearch resources, the \texttt{EnumCache} class (\texttt{enum\_cache.py}, 138 lines) maintains these lists directly in the server's memory (RAM) with a Time-To-Live (TTL) of 3,600 seconds (1 hour).
+    \item \textbf{Async Background Refresh}: The cache refresh process runs as a background task via \texttt{asyncio.Task} (\texttt{\_refresh\_loop}). Therefore, any GET request from the frontend or Pydantic Validator from the Chatbot can retrieve these data tags in sub-millisecond times thanks to synchronous properties (\texttt{@property}), significantly improving the application's overall response speed.
 \end{itemize}
+
+\section{Key Quantitative Metrics}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Metric} & \textbf{Value} \\
+        \hline
+        ES Docker image version & \texttt{elasticsearch:8.13.0} \\
+        \hline
+        JVM heap allocation & 512 MB initial / 512 MB maximum \\
+        \hline
+        Sync batch size & 500 records per Supabase fetch \\
+        \hline
+        City patterns dictionary & 63 geographic entities \\
+        \hline
+        Industry domain categories & 66 standardized tags \\
+        \hline
+        Salary buckets & 6 ranges (VND millions) \\
+        \hline
+        Experience buckets & 4 ranges \\
+        \hline
+        Work type tags & 5 standard categories \\
+        \hline
+        Foreign currency filter & 17 international currency codes \\
+        \hline
+        Title boost weight & $\times$3 (\texttt{tieu\_de\textasciicircum3}) \\
+        \hline
+        Company boost weight & $\times$2 (\texttt{cong\_ty\textasciicircum2}) \\
+        \hline
+        EnumCache TTL & 3,600 seconds (1 hour) \\
+        \hline
+        Max aggregation buckets (cities) & 1,000 \\
+        \hline
+        Max aggregation buckets (categories) & 500 \\
+        \hline
+        helpers.ts complexity & 152 lines \\
+        \hline
+        enum\_cache.py complexity & 138 lines \\
+        \hline
+    \end{tabular}
+    \caption{Elasticsearch Infrastructure Metrics}
+    \label{tab:chapter_4_metrics}
+\end{table}

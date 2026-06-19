@@ -1,37 +1,37 @@
-# Chapter 8: ML Training Pipeline — Seven-Phase QLoRA Fine-Tuning
+# Chapter 8: ML Training Pipeline — Six-Phase QLoRA Fine-Tuning
 
 ## 8.1 Overview
 
-Chapter 7 described the inference architecture of the AI chatbot orchestrator — the three-adapter Multi-Adapter SLM system that serves users at runtime. This chapter documents the **training pipeline** that produces those adapters: a seven-phase automated process that transforms raw synthetic CV data into three specialized QLoRA-finetuned LoRA adapters and validates their quality through an LLM-as-Judge benchmark suite. The pipeline runs entirely on a single NVIDIA RTX A5000 GPU (24 GB VRAM) and completes end-to-end in approximately 13 hours of compute time.
+Chapter 7 described the inference architecture of the AI chatbot orchestrator — the three-adapter Multi-Adapter SLM system that serves users at runtime. This chapter documents the **training pipeline** that produces those adapters: a six-phase automated process that transforms raw synthetic CV data into three specialized QLoRA-finetuned LoRA adapters and validates their quality through an LLM-as-Judge benchmark suite. The pipeline runs entirely on a single NVIDIA RTX A5000 GPU (24 GB VRAM) and completes end-to-end in approximately 13 hours of compute time.
 
-The seven phases are organized as a sequential data transformation pipeline, where each phase's output becomes the next phase's input:
+The six phases are organized as a sequential data transformation pipeline, where each phase's output becomes the next phase's input:
 
 1. **Phase 1 — Synthetic CV Generation**: A Qwen2.5:14B language model, running locally via Ollama, generates structured Vietnamese CV content across 36 role configurations spanning seven industry domains. A RenderCV renderer converts each generated JSON into PDF, PNG, and HTML formats. Ten percent of CVs are intentionally degraded to establish ground truth for the HR coaching evaluation track.
 
-2. **Phase 3 — Semantic Chunking & Entity Extraction**: A three-stage extraction cascade (semantic chunker → regex extractor → PhoBERT NER) converts unstructured CV text into a structured `CanonicalResume` JSON schema with typed fields for personal information, experience, education, skills, projects, certifications, and courses.
+2. **Phase 2 — Semantic Chunking & Entity Extraction**: A three-stage extraction cascade (semantic chunker → regex extractor → PhoBERT NER) converts unstructured CV text into a structured `CanonicalResume` JSON schema with typed fields for personal information, experience, education, skills, projects, certifications, and courses.
 
-3. **Phase 4 — Validation & Vector Storage**: A multi-criteria quality scorer computes a 0–100 quality score across four dimensions (completeness, specificity, consistency, presentation), while BGE-M3 embeddings (1024-dimensional) are generated for four named vectors and stored in a Qdrant collection.
+3. **Phase 3 — Validation & Vector Storage**: A multi-criteria quality scorer computes a 0–100 quality score across four dimensions (completeness, specificity, consistency, presentation), while BGE-M3 embeddings (1024-dimensional) are generated for four named vectors and stored in a Qdrant collection.
 
-4. **Phase 5 — RAG Task Execution**: Three downstream tasks (CV assessment, job matching, interview preparation) consume the validated resumes and their vector representations to generate task-specific outputs that seed the dataset synthesis phase.
+4. **Phase 4 — RAG Task Execution**: Three downstream tasks (CV assessment, job matching, interview preparation) consume the validated resumes and their vector representations to generate task-specific outputs that seed the dataset synthesis phase.
 
-5. **Phase 6 — Synthetic Dataset Generation**: Gemini-3.1-flash-lite generates high-quality reference responses for three adapter-specific SFT datasets plus one DPO preference dataset. The SFT datasets total 6,601 training samples across three adapters; the DPO dataset contains paired chosen/rejected responses for preference alignment.
+5. **Phase 5 — Synthetic Dataset Generation**: Gemini-3.1-flash-lite generates high-quality reference responses for three adapter-specific SFT datasets plus one DPO preference dataset. The SFT datasets total 6,601 training samples across three adapters; the DPO dataset contains paired chosen/rejected responses for preference alignment.
 
-6. **Phase 7 — QLoRA Fine-Tuning & DPO Alignment**: The Qwen2.5:1.5B-Instruct base model is fine-tuned using QLoRA (4-bit NF4 quantization with LoRA rank 16) to produce three task-specialized adapters. Adapter B undergoes a second-stage DPO alignment that stacks a preference-learned adapter on top of the frozen SFT adapter, creating a three-layer training architecture.
+6. **Phase 6 — QLoRA Fine-Tuning & DPO Alignment**: The Qwen2.5:1.5B-Instruct base model is fine-tuned using QLoRA (4-bit NF4 quantization with LoRA rank 16) to produce three task-specialized adapters. Adapter B undergoes a second-stage DPO alignment that stacks a preference-learned adapter on top of the frozen SFT adapter, creating a three-layer training architecture.
 
-7. **Phase 8 — LLM-as-Judge Benchmark Assessment**: A four-track evaluation suite uses Gemini-3.1-flash-lite as an automated judge to assess extraction accuracy, HR feedback quality, tool calling precision, and structured generation output, comparing base models against fine-tuned adapters across seven model configurations.
+7. **Phase 7 — LLM-as-Judge Benchmark Assessment**: A four-track evaluation suite uses Gemini-3.1-flash-lite as an automated judge to assess extraction accuracy, HR feedback quality, tool calling precision, and structured generation output, comparing base models against fine-tuned adapters across seven model configurations.
 
 ```mermaid
 flowchart LR
-    P1["Phase 1\nSynthetic CV\nGeneration\n(500 CVs)"] --> P3["Phase 3\nSemantic\nChunking\n& Extraction"]
-    P3 --> P4["Phase 4\nValidation\n& Storage\n(Qdrant)"]
-    P4 --> P5["Phase 5\nRAG Task\nExecution"]
-    P5 --> P6["Phase 6\nDataset\nSynthesis\n(6,601 SFT)"]
-    P6 --> P7["Phase 7\nQLoRA +\nDPO Training\n(~13h)"]
-    P7 --> P8["Phase 8\nLLM-as-Judge\nBenchmark"]
+    P1["Phase 1\nSynthetic CV\nGeneration\n(500 CVs)"] --> P2["Phase 2\nSemantic\nChunking\n& Extraction"]
+    P2 --> P3["Phase 3\nValidation\n& Storage\n(Qdrant)"]
+    P3 --> P4["Phase 4\nRAG Task\nExecution"]
+    P4 --> P5["Phase 5\nDataset\nSynthesis\n(6,601 SFT)"]
+    P5 --> P6["Phase 6\nQLoRA +\nDPO Training\n(~13h)"]
+    P6 --> P7["Phase 7\nLLM-as-Judge\nBenchmark"]
 
-    P7 -->|"Adapter A"| OA["careerintel\n-tool-call"]
-    P7 -->|"Adapter B"| OB["careerintel\n-hr-coach"]
-    P7 -->|"Adapter C"| OC["careerintel\n-structured-gen"]
+    P6 -->|"Adapter A"| OA["careerintel\n-tool-call"]
+    P6 -->|"Adapter B"| OB["careerintel\n-hr-coach"]
+    P6 -->|"Adapter C"| OC["careerintel\n-structured-gen"]
 ```
 
 ## 8.2 Phase 1: Synthetic CV Generation
@@ -87,13 +87,13 @@ flowchart TD
     RENDERCV --> OUT_BAD["data/json_bad/ + pdf_bad/\n(~50 CVs)"]
 ```
 
-## 8.3 Phase 3: Semantic Chunking & Entity Extraction
+## 8.3 Phase 2: Semantic Chunking & Entity Extraction
 
 ### 8.3.1 Architecture
 
-Phase 3 transforms unstructured CV text — whether parsed from PDF or extracted from the Phase 1 JSON ground truth — into a typed, structured `CanonicalResume` data model through a three-stage extraction cascade. Each stage operates independently and contributes complementary entity types, with a final merge step that consolidates all extracted entities into the canonical schema.
+Phase 2 transforms unstructured CV text — whether parsed from PDF or extracted from the Phase 1 JSON ground truth — into a typed, structured `CanonicalResume` data model through a three-stage extraction cascade. Each stage operates independently and contributes complementary entity types, with a final merge step that consolidates all extracted entities into the canonical schema.
 
-The `CanonicalResume` dataclass serves as the universal data contract between Phase 3 and all downstream phases. It contains typed fields for `PersonalInfo` (name, email, phone, location, LinkedIn, GitHub), a list of `ExperienceEntry` objects (each with company, position, dates, and achievement highlights), `EducationEntry` objects (institution, degree, area, GPA), `ProjectEntry` objects (name, description, technologies, highlights), `SkillCategory` lists (label and skill arrays), and optional `CertificationEntry` and `CourseEntry` collections. Each experience entry also carries optional `normalized_title` and `inferred_seniority` fields populated by the LLM normalizer.
+The `CanonicalResume` dataclass serves as the universal data contract between Phase 2 and all downstream phases. It contains typed fields for `PersonalInfo` (name, email, phone, location, LinkedIn, GitHub), a list of `ExperienceEntry` objects (each with company, position, dates, and achievement highlights), `EducationEntry` objects (institution, degree, area, GPA), `ProjectEntry` objects (name, description, technologies, highlights), `SkillCategory` lists (label and skill arrays), and optional `CertificationEntry` and `CourseEntry` collections. Each experience entry also carries optional `normalized_title` and `inferred_seniority` fields populated by the LLM normalizer.
 
 ### 8.3.2 Semantic Chunker
 
@@ -138,11 +138,11 @@ flowchart TD
     MERGE --> CANONICAL["CanonicalResume\n(typed JSON schema)"]
 ```
 
-## 8.4 Phase 4: Validation & Vector Storage
+## 8.4 Phase 3: Validation & Vector Storage
 
 ### 8.4.1 Field-Level Validation
 
-Phase 4 receives a `CanonicalResume` from Phase 3 and applies field-level validators that detect structural inconsistencies and factual implausibilities. The validators check for:
+Phase 3 receives a `CanonicalResume` from Phase 2 and applies field-level validators that detect structural inconsistencies and factual implausibilities. The validators check for:
 
 - **Date consistency**: Reversed date ranges (start_date > end_date), future dates, implausibly ancient dates (before 1950), and unrealistic employment spans (a single position lasting more than 20 years)
 - **Experience overlap**: Concurrent employment entries whose date ranges overlap by more than a threshold, suggesting either data extraction errors or legitimate parallel employment
@@ -168,20 +168,20 @@ A CV is flagged as `is_bad_cv = True` when either the overall score falls below 
 
 ### 8.4.3 BGE-M3 Embedding & Qdrant Storage
 
-After validation, Phase 4 generates dense vector embeddings using the BAAI/bge-m3 model (loaded via the `sentence-transformers` library), producing 1024-dimensional embeddings for four named dimensions:
+After validation, Phase 3 generates dense vector embeddings using the BAAI/bge-m3 model (loaded via the `sentence-transformers` library), producing 1024-dimensional embeddings for four named dimensions:
 
 | Vector Name | Input Text | Purpose |
 |-------------|-----------|---------|
-| `overall` | Full resume text summary | General resume similarity search |
-| `skills` | Concatenated skill lists | Skill-gap analysis (Phase 5 `match_jobs`) |
+| `full_profile` | Full resume text summary | General resume similarity search |
+| `skills` | Concatenated skill lists | Skill-gap analysis (Phase 4 `match_jobs`) |
 | `experience` | Concatenated experience highlights | Experience-based retrieval |
 | `education` | Education entries text | Education-based filtering |
 
 Each resume is upserted into the Qdrant `resumes` collection as a point with a UUID-based point ID, four named vectors, and a payload containing the full `CanonicalResume` JSON, the quality score, and a flattened `skills_flat` list for token-overlap skill-gap analysis. The multi-vector schema enables the chatbot's `match_jobs` tool to perform skill-specific similarity searches rather than relying on monolithic resume-level embeddings.
 
-## 8.5 Phase 5: RAG Task Execution
+## 8.5 Phase 4: RAG Task Execution
 
-Phase 5 consumes the validated resumes and their Qdrant vector representations to generate three categories of task-specific outputs that become the raw material for Phase 6's dataset synthesis. The following subsections describe each task and include abbreviated examples extracted from the actual training datasets to illustrate the output format.
+Phase 4 consumes the validated resumes and their Qdrant vector representations to generate three categories of task-specific outputs that become the raw material for Phase 5's dataset synthesis. The following subsections describe each task and include abbreviated examples extracted from the actual training datasets to illustrate the output format.
 
 ### 8.5.1 CV Assessment
 
@@ -291,13 +291,13 @@ This output demonstrates Adapter C's target format: structured markdown with nes
 
 ### 8.5.4 Qdrant-Based Context Injection
 
-The Qdrant-based retriever provides context injection for all three tasks, retrieving the most relevant resume vectors for the given query context. The retriever uses the four named vectors (overall, skills, experience, education) to perform task-specific similarity searches — for example, the job matching task queries the `skills` vector to identify resumes with overlapping competencies, while the interview preparation task queries the `experience` vector to identify project-specific interview topics. This vector-guided context injection ensures that the generated outputs reference actual CV content rather than hallucinated qualifications.
+The Qdrant-based retriever provides context injection for all three tasks, retrieving the most relevant resume vectors for the given query context. The retriever uses the four named vectors (full_profile, skills, experience, education) to perform task-specific similarity searches — for example, the job matching task queries the `skills` vector to identify resumes with overlapping competencies, while the interview preparation task queries the `experience` vector to identify project-specific interview topics. This vector-guided context injection ensures that the generated outputs reference actual CV content rather than hallucinated qualifications.
 
-## 8.6 Phase 6: Synthetic Dataset Generation
+## 8.6 Phase 5: Synthetic Dataset Generation
 
 ### 8.6.1 Dataset Architecture
 
-Phase 6 synthesizes the training datasets for all three adapters plus a DPO preference dataset for Adapter B's alignment stage. All datasets follow the **ChatML format**: each training example consists of exactly three messages (system, user, assistant) where the system message matches the inference-time prompt that the corresponding adapter will receive at runtime. This alignment between training-time and inference-time prompts is critical for QLoRA adapter performance, as discussed in §7.2.4.
+Phase 5 synthesizes the training datasets for all three adapters plus a DPO preference dataset for Adapter B's alignment stage. All datasets follow the **ChatML format**: each training example consists of exactly three messages (system, user, assistant) where the system message matches the inference-time prompt that the corresponding adapter will receive at runtime. This alignment between training-time and inference-time prompts is critical for QLoRA adapter performance, as discussed in §7.2.4.
 
 The synthesis pipeline uses Gemini-3.1-flash-lite as the teacher model, generating high-quality reference responses that become the "assistant" turn in each training example. A local Qwen2.5:7B model via Ollama generates the "rejected" responses for DPO pairs. The pipeline supports concurrent generation with configurable thread pools and implements checkpoint-based resume-on-crash functionality.
 
@@ -375,7 +375,7 @@ The `prepare_sft_data.py` script then applies the target model's chat template v
 
 ```mermaid
 flowchart TD
-    subgraph "Phase 6: Dataset Synthesis"
+    subgraph "Phase 5: Dataset Synthesis"
         CV_GOOD["Good CVs\n(quality ≥ 45)"] --> DS2["sft_ds2_gemini.jsonl\n(Positive Reinforcement)"]
         CV_BAD["Bad CVs\n(quality < 45)"] --> DS1["sft_ds1_gemini.jsonl\n(Constructive Criticism)"]
 
@@ -397,7 +397,7 @@ flowchart TD
     DPO_OUT -->|"Preference pairs"| P7D["Adapter B\nDPO"]
 ```
 
-## 8.7 Phase 7: QLoRA Fine-Tuning & DPO Alignment
+## 8.7 Phase 6: QLoRA Fine-Tuning & DPO Alignment
 
 ### 8.7.1 QLoRA Technical Foundation
 
@@ -554,11 +554,11 @@ PARAMETER temperature 0.3
 
 Note that the HR coach model uses the DPO adapter (not the SFT-only adapter), as confirmed by the build script's adapter path: `models/qlora-qwen25-1-5b-dpo/final_adapter`. This ensures that the deployed Adapter B benefits from the preference alignment documented in §8.7.4.
 
-## 8.8 Phase 8: LLM-as-Judge Benchmark Assessment
+## 8.8 Phase 7: LLM-as-Judge Benchmark Assessment
 
 ### 8.8.1 Evaluation Framework Architecture
 
-Phase 8 implements a comprehensive benchmark suite that evaluates both the extraction pipeline (Phases 3–4) and the three fine-tuned adapters across four tracks. The evaluation uses the **LLM-as-Judge** methodology, where a capable external model (Gemini-3.1-flash-lite) evaluates the quality of the target models' outputs against rubric-defined criteria.
+Phase 7 implements a comprehensive benchmark suite that evaluates both the extraction pipeline (Phases 2–3) and the three fine-tuned adapters across four tracks. The evaluation uses the **LLM-as-Judge** methodology, where a capable external model (Gemini-3.1-flash-lite) evaluates the quality of the target models' outputs against rubric-defined criteria.
 
 The benchmark framework is organized as a modular evaluation pipeline:
 
@@ -601,7 +601,7 @@ run_benchmark.py                    ← Orchestrator (runs all tracks)
 
 ### 8.8.2 Track 1: Extraction Accuracy
 
-Track 1 evaluates the Phase 3–4 extraction pipeline's ability to parse synthetic CVs into structured `CanonicalResume` JSON. Unlike the other tracks, this evaluation measures pipeline performance rather than adapter quality.
+Track 1 evaluates the Phase 2–3 extraction pipeline's ability to parse synthetic CVs into structured `CanonicalResume` JSON. Unlike the other tracks, this evaluation measures pipeline performance rather than adapter quality.
 
 The benchmark processes 50 CVs through the full extraction pipeline and measures per-section extraction rates:
 
@@ -618,7 +618,7 @@ The benchmark processes 50 CVs through the full extraction pipeline and measures
 
 The five core sections (personal info, education, experience, skills, projects) achieve **perfect 100% extraction rates** across all 50 test CVs. The lower rates for certifications (81.5%) and courses (80.0%) reflect the highly variable formatting of these optional sections — they may appear as bullet lists, comma-separated inline text, or table rows, and not all synthetic CVs include them. The Gemini judge assigns an average quality score of **6.9/10** across the 50 extractions, with deductions primarily for minor entity boundary errors in complex multi-line certificate entries.
 
-The overall 97.3% extraction rate comfortably exceeds the 80% pass threshold, validating the Phase 3 extraction cascade's effectiveness on Vietnamese-language CVs with diverse formatting.
+The overall 97.3% extraction rate comfortably exceeds the 80% pass threshold, validating the Phase 2 extraction cascade's effectiveness on Vietnamese-language CVs with diverse formatting.
 
 ### 8.8.3 Track 2: HR Feedback Quality — The DPO Effect
 

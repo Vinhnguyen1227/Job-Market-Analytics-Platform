@@ -1,54 +1,171 @@
-\chapter{Authentication & Authorization}
+\chapter{Authentication \& Authorization}
 
-\chapter{# 5.1 Architecture Overview}
+\section{Architecture Overview}
 
 In the CareerIntel platform, securing user data and managing access control are pivotal. Instead of building and maintaining a custom JSON Web Token (JWT) issuance system from scratch, the project leverages a managed authentication model via \textbf{Supabase Auth}. Supabase provides a robust identity solution, backed by PostgreSQL, which integrates tightly with the Next.js 16 Middleware architecture.
 
-To add an additional security layer, the platform integrates \textbf{Redis} to handle Token Revocation (Blacklisting) immediately when a user logs out. The combination of Supabase (for identity verification) and Redis (for session state control) creates a system that is both secure and highly flexible.
+To add an additional security layer, the platform integrates \textbf{Redis} to handle Token Revocation (Blacklisting) immediately when a user logs out, and \textbf{Rate Limiting} to protect API endpoints from abuse. The combination of Supabase (for identity verification) and Redis (for session state control and security enforcement) creates a system that is both secure and highly flexible.
 
-\chapter{# 5.2 Authentication Flow}
+\subsection{Technology Choice: Supabase Auth vs Alternatives}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|p{0.15\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.15\textwidth}|}
+        \hline
+        \textbf{Criteria} & \textbf{Supabase Auth} & \textbf{Auth0} & \textbf{Firebase Auth} & \textbf{Custom JWT} \\
+        \hline
+        \textbf{Hosting} & Managed (PostgreSQL-backed) & Managed SaaS & Managed (Google Cloud) & Self-hosted \\
+        \hline
+        \textbf{Pricing} & Free tier (50K MAU) & Free tier (7.5K MAU) & Free tier (10K verifications/month) & Infrastructure cost only \\
+        \hline
+        \textbf{Next.js integration} & \texttt{@supabase/ssr} with cookie management & \texttt{@auth0/nextjs-auth0} & \texttt{firebase-admin} SDK & Manual cookie/header management \\
+        \hline
+        \textbf{Database integration} & Native PostgreSQL RLS policies & External user store & Firestore integration & Custom user tables \\
+        \hline
+        \textbf{Social login} & Google, GitHub, OAuth & 30+ social providers & Google, Facebook, Twitter & Manual OAuth implementation \\
+        \hline
+        \textbf{JWT customization} & Limited (via PostgreSQL hooks) & Extensive (Actions/Rules) & Limited & Full control \\
+        \hline
+        \textbf{RLS (Row Level Security)} & Native support & Not applicable & Firestore Security Rules & Manual implementation \\
+        \hline
+        \textbf{Operational overhead} & Minimal & Minimal & Minimal & High (key rotation, revocation, migration) \\
+        \hline
+    \end{tabular}
+    \caption{Authentication Technology Comparison}
+    \label{tab:auth_comparison}
+\end{table}
+
+Supabase Auth was selected for its \textbf{native PostgreSQL Row Level Security (RLS) integration}, which allows database-level access control policies without custom middleware. Since the application already uses Supabase for its relational data layer, using its built-in auth system eliminates the need for a separate identity provider and reduces integration complexity.
+
+\section{Authentication Flow}
 
 The authentication process is designed around Server-side Cookies rather than storing tokens in the browser's Local Storage. This approach helps mitigate Cross-Site Scripting (XSS) attacks aimed at token theft.
 
 \begin{enumerate}
-\item \textbf{Login}: The user provides an email and password. The frontend calls a Server Action (utilizing Supabase's \textit{}INLINE\textit{CODE}0\textit{}).
-\item \textbf{Token Issuance}: Supabase verifies the credentials and returns a JWT. This JWT is set into an HTTP-only Cookie by the Server Client.
-\item \textbf{Request Validation}: Whenever the browser makes a request to protected pages, the Next.js Middleware reads the Cookie and validates the JWT using \textit{}INLINE\textit{CODE}1\textit{}.
-\item \textbf{Logout}: When the user logs out, the current JWT is extracted and hashed, then stored in the Redis Blacklist with a Time-To-Live (TTL) corresponding to the token's remaining expiration time. Finally, the Supabase \textit{}INLINE\textit{CODE}2\textit{} function is called to clear the Cookie.
+    \item \textbf{Login}: The user provides an email and password. The frontend calls a Server Action (utilizing Supabase's \texttt{signInWithPassword}).
+    \item \textbf{Token Issuance}: Supabase verifies the credentials and returns a JWT. This JWT is set into an HTTP-only Cookie by the Server Client.
+    \item \textbf{Request Validation}: Whenever the browser makes a request to protected pages, the Next.js Middleware reads the Cookie and validates the JWT using \texttt{supabase.auth.getUser()}.
+    \item \textbf{Logout}: When the user logs out, the current JWT is extracted and hashed, then stored in the Redis Blacklist with a Time-To-Live (TTL) corresponding to the token's remaining expiration time. Finally, the Supabase \texttt{signOut} function is called to clear the Cookie.
 \end{enumerate}
 
-\textit{}CODE\textit{BLOCK}0\textit{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_5_thesis_2_diagram_1.pdf}
+    \caption{Authentication and Logout Flow}
+    \label{fig:chapter_5_diagram_1}
+\end{figure}
 
-\chapter{# 5.3 Route Protection Strategy}
+\section{Route Protection Strategy}
 
-The platform's routing system is divided into two primary groups: Public Routes and Protected Routes. Access control is enforced in the \textit{}INLINE\textit{CODE}3\textit{} file using the \textit{}INLINE\textit{CODE}4\textit{} from the \textit{}INLINE\textit{CODE}5\textit{} library.
+The platform's routing system is divided into two primary groups: Public Routes and Protected Routes. Access control is enforced in the \texttt{middleware.ts} file using the \texttt{createServerClient} from the \texttt{@supabase/ssr} library. The middleware intercepts every incoming request and validates the JWT before allowing access.
 
 \begin{itemize}
-\item \textbf{Protected Pages}: Pages such as \textit{}INLINE\textit{CODE}6\textit{}, \textit{}INLINE\textit{CODE}7\textit{}, \textit{}INLINE\textit{CODE}8\textit{}, \textit{}INLINE\textit{CODE}9\textit{}, and \textit{}INLINE\textit{CODE}10\textit{} strictly require a valid session.
-\item \textbf{Public vs Protected APIs}: Certain APIs like \textit{}INLINE\textit{CODE}11\textit{} and \textit{}INLINE\textit{CODE}12\textit{} are publicly accessible, whereas the remaining APIs require authentication.
+    \item \textbf{Protected Pages}: Pages such as \texttt{/profile}, \texttt{/ai}, \texttt{/search}, \texttt{/insights}, and \texttt{/job} (including all nested routes such as \texttt{/job/[id]}) strictly require a valid session. The \texttt{startsWith()} matching ensures all child routes inherit the protection policy.
+    \item \textbf{Public vs Protected APIs}: Certain APIs like \texttt{/api/chatbot} and \texttt{/api/kie} are publicly accessible, whereas all other \texttt{/api/*} routes require authentication.
 \end{itemize}
 
 \textbf{Handling Unauthenticated Requests:}
 The system handles requests intelligently based on their context.
 \begin{itemize}
-\item If a user attempts to access a protected page (UI) without a token, the Middleware responds with a \textit{}INLINE\textit{CODE}13\textit{} to the \textit{}INLINE\textit{CODE}14\textit{} page.
-\item However, if a request is made to a Protected API (for example, fetching personal data via a \textit{}INLINE\textit{CODE}15\textit{} call), a redirect is inappropriate and would cause client-side errors. In this scenario, the Middleware returns a \textit{}INLINE\textit{CODE}16\textit{} status code in JSON format, allowing the frontend to catch and handle the error gracefully.
+    \item If a user attempts to access a protected page (UI) without a token, the Middleware responds with a \texttt{307 Redirect} to the \texttt{/login} page.
+    \item However, if a request is made to a Protected API (for example, fetching personal data via a \texttt{fetch} call), a redirect is inappropriate and would cause client-side errors. In this scenario, the Middleware returns a \texttt{401 Unauthorized} status code in JSON format, allowing the frontend to catch and handle the error gracefully.
 \end{itemize}
 
-\chapter{# 5.4 Advanced Security: JWT Blacklisting via Redis}
+\section{Advanced Security: JWT Blacklisting via Redis}
 
-An inherent drawback of Stateless JWT architecture is that a token cannot be revoked before its expiration time. To address this, the project implements a \textbf{JWT Blacklisting} mechanism using Redis within the \textit{}INLINE\textit{CODE}17\textit{} module.
+An inherent drawback of Stateless JWT architecture is that a token cannot be revoked before its expiration time. To address this, the project implements a \textbf{JWT Blacklisting} mechanism using Redis within the \texttt{redisSecurity.ts} module.
 
-\chapter{## Optimized Storage Process:}
-Instead of storing the raw JWT string (which may contain sensitive payloads and consume more storage), the system employs the \textbf{SHA-256} algorithm to generate a Hash from the JWT via the \textit{}INLINE\textit{CODE}18\textit{} function. This hash serves as the key stored in Redis.
-Furthermore, the key's Time-To-Live (TTL) in Redis is calculated based on the JWT's \textit{}INLINE\textit{CODE}19\textit{} claim, by subtracting the current time from the expiration time (\textit{}INLINE\textit{CODE}20\textit{}). Consequently, Redis automatically frees up memory once the token expires, eliminating the need for manual garbage collection.
+\subsection{Optimized Storage Process:}
+Instead of storing the raw JWT string (which may contain sensitive payloads and consume more storage), the system employs the \textbf{SHA-256} algorithm to generate a Hash from the JWT via the \texttt{getTokenHash()} function. This hash serves as the key stored in Redis.
+Furthermore, the key's Time-To-Live (TTL) in Redis is calculated based on the JWT's \texttt{exp} claim, by subtracting the current time from the expiration time (\texttt{getJwtExpiry()}). Consequently, Redis automatically frees up memory once the token expires, eliminating the need for manual garbage collection.
 
-\chapter{## Fail-Closed Strategy:}
-In distributed systems, connection failures to the cache layer (Redis) are always a possibility. The authentication module adopts a \textbf{Fail-Closed} strategy to prioritize security (Security > Availability).
-If the \textit{}INLINE\textit{CODE}21\textit{} function cannot connect to Redis, the system evaluates the token as "rejected" (Blacklisted = true). This decision is intended to prevent security breaches while Redis is down, forcing affected users to temporarily log in again rather than allowing revoked tokens to slip through.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{images/chapter_5_thesis_2_diagram_2.pdf}
+    \caption{JWT Blacklisting Storage Process}
+    \label{fig:chapter_5_diagram_2}
+\end{figure}
 
-\chapter{# 5.5 Form Management and Input Validation}
+\subsection{Fail-Closed vs Fail-Open: Deliberate Security Trade-offs}
 
-The processing of authentication forms (Login, Signup, Profile Update) is handled through the \textbf{Next.js Server Actions} (\textit{}INLINE\textit{CODE}22\textit{}) paradigm. This approach completely eliminates the need to create intermediary API routes solely for receiving form data, thereby reducing network complexity and improving processing speed.
+The \texttt{redisSecurity.ts} module implements two distinct failure strategies depending on the security criticality of the operation:
 
-All input data is strictly validated using the \textbf{Zod} library (\textit{}INLINE\textit{CODE}23\textit{}, \textit{}INLINE\textit{CODE}24\textit{}). Actions that record profile data (Experience, Education, Skill, CV) into public PostgreSQL tables (via the Supabase client) are tightly bound to the current \textit{}INLINE\textit{CODE}25\textit{}. This ensures data integrity and prevents Insecure Direct Object Reference (IDOR) vulnerabilities.
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|p{0.5\textwidth}|}
+        \hline
+        \textbf{Function} & \textbf{Failure Strategy} & \textbf{Rationale} \\
+        \hline
+        \texttt{isTokenBlacklisted()} & \textbf{Fail-Closed} (treat as blacklisted) & Security $>$ Availability — prevents revoked tokens from slipping through if Redis is unreachable \\
+        \hline
+        \texttt{checkRateLimit()} & \textbf{Fail-Open} (allow request through) & Availability $>$ Security — rate limiting failure should not block legitimate search requests \\
+        \hline
+    \end{tabular}
+    \caption{Failure Strategies in Redis Security Module}
+    \label{tab:failure_strategies}
+\end{table}
+
+This deliberate contrast ensures that authentication-critical operations prioritize security (forcing affected users to re-login temporarily), while non-critical operations like rate limiting prioritize availability (allowing requests through with degraded protection).
+
+\section{Rate Limiting}
+
+In addition to JWT blacklisting, the \texttt{redisSecurity.ts} module implements \textbf{API Rate Limiting} using the \textbf{Fixed Window Counter} algorithm.
+
+\subsection{Mechanism:}
+\begin{enumerate}
+    \item A Redis key is constructed from the client's IP address and the current time window: \texttt{rate\_limit:\{ip\}:\{floor(now / windowSeconds)\}}.
+    \item Each incoming request atomically increments the key using \texttt{redis.incr(key)}.
+    \item If the key is newly created (count = 1), a TTL of \texttt{windowSeconds + 10} seconds is set to ensure automatic cleanup.
+    \item If the count exceeds the configured limit (default: \textbf{50 requests per 60 seconds}), the request is rejected.
+\end{enumerate}
+
+\subsection{Design Decisions:}
+\begin{itemize}
+    \item \textbf{Fixed Window vs Sliding Window}: The Fixed Window algorithm was chosen for its simplicity and minimal Redis operations (single \texttt{INCR} per request). While it can allow up to 2$\times$ burst at window boundaries (a known limitation), this trade-off is acceptable for the platform's traffic patterns.
+    \item \textbf{TTL Buffer (+10s)}: The extra 10 seconds on the TTL ensures that the Redis key outlives the window, preventing a race condition where the key expires mid-window and resets the counter.
+\end{itemize}
+
+\section{Form Management and Input Validation}
+
+The processing of authentication forms (Login, Signup, Profile Update) is handled through the \textbf{Next.js Server Actions} (\texttt{'use server'}) paradigm. This approach completely eliminates the need to create intermediary API routes solely for receiving form data, thereby reducing network complexity and improving processing speed.
+
+All input data is strictly validated using the \textbf{Zod} library (\texttt{LoginSchema}, \texttt{SignupSchema}). Actions that record profile data (Experience, Education, Skill, CV) into public PostgreSQL tables (via the Supabase client) are tightly bound to the current \texttt{user\_id}. This ensures data integrity and prevents Insecure Direct Object Reference (IDOR) vulnerabilities — a user can only create, update, or delete records where \texttt{user\_id} matches their authenticated session.
+
+\section{Key Quantitative Metrics}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Metric} & \textbf{Value} \\
+        \hline
+        Protected page routes & 5 (\texttt{/profile}, \texttt{/ai}, \texttt{/search}, \texttt{/insights}, \texttt{/job}) \\
+        \hline
+        Public API routes & 2 (\texttt{/api/chatbot}, \texttt{/api/kie}) \\
+        \hline
+        Rate limit threshold & 50 requests / 60 seconds / IP \\
+        \hline
+        Rate limit algorithm & Fixed Window Counter \\
+        \hline
+        JWT hash algorithm & SHA-256 \\
+        \hline
+        Blacklist TTL & Dynamic (matches JWT \texttt{exp} claim) \\
+        \hline
+        Default fallback TTL & 3,600 seconds (1 hour) \\
+        \hline
+        Rate limit TTL buffer & +10 seconds beyond window \\
+        \hline
+        Auth validation schemas & 2 (\texttt{LoginSchema}, \texttt{SignupSchema}) \\
+        \hline
+        Profile CRUD tables & 5 (\texttt{profiles}, \texttt{experiences}, \texttt{educations}, \texttt{skills}, \texttt{user\_cvs}) \\
+        \hline
+        redisSecurity.ts complexity & 126 lines \\
+        \hline
+        middleware.ts complexity & 59 lines \\
+        \hline
+        actions.ts complexity & 297 lines (8 Server Actions) \\
+        \hline
+    \end{tabular}
+    \caption{Authentication and Security Metrics}
+    \label{tab:chapter_5_metrics}
+\end{table}
