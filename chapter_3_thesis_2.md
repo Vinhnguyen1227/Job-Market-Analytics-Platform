@@ -71,11 +71,18 @@ erDiagram
     }
     
     educations {
-        uuid id PK
+        string id PK
         uuid user_id FK
-        string institution
+        string school
         string degree
-        date graduation_date
+        string field_of_study
+        string start_month
+        string start_year
+        string end_month
+        string end_year
+        string activities
+        string description
+        timestamp created_at
     }
     
     skills {
