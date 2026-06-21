@@ -10,6 +10,7 @@
 * [x] Set up async scraper worker (Celery, Redis)
 * [x] Add ML async queue to FastAPI chatbot (Redis sessions, Celery workers, job polling)
 * [x] KIE Route migration to ML Async Queue (Python-based processing)
+* [x] Draft and compile all missing sections of Thesis 1 (Abstract, Intro, Objectives, Results, Conclusion, References, Appendices) conforming to 2026 USTH template
 
 ## Bug Log
 * **Turbopack build failed**: `Module not found: Can't resolve '@supabase/ssr'`.

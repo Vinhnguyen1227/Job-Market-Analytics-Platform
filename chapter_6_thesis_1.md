@@ -1,227 +1,142 @@
 # Chapter 6: Frontend AI Presentation Layer (Next.js)
 
 ## 6.1 Overview
-The frontend presentation layer provides the interactive conversational interface for the AI-driven features of the CareerIntel platform. Built on the Next.js 16 App Router architecture, the application utilizes a hybrid paradigm, combining Server Components for secure data fetching and Client Components for real-time reactivity. This chapter details the technical architecture of the AI chat interface (`/ai`), focusing on message state management, asynchronous long-polling for machine learning tasks, and the Backend-For-Frontend (BFF) proxy pattern.
 
-## 6.2 Next.js App Router Architecture
-The Next.js 16 App Router fundamentally shifts the rendering strategy by delineating Server Components and Client Components.
+The frontend presentation layer serves as the user-facing coordination surface for the CareerIntel platform, bridging the interface with the synchronous inference and asynchronous processing domains (introduced in Chapter 1). Built on the Next.js App Router paradigm, the presentation layer translates user interactions into API orchestration calls while managing state reactivity, asynchronous machine learning tasks, and conversation history.
 
-### 6.2.1 Component Boundaries
-The entry point for the `/ai` route is a Server Component, responsible for initial authentication validation and secure retrieval of the user's conversational history. It executes exclusively in the Node.js runtime, accessing the database securely without exposing credentials to the browser.
-Conversely, the primary chat UI relies on the `"use client"` directive. This boundary enables the use of React hooks (`useState`, `useEffect`, `useRef`) required for managing dynamic message lists, observing DOM mutations for auto-scrolling, and processing `FormData` for CV uploads.
+This chapter details the frontend orchestration architecture. It describes how the server-client rendering boundary isolates backend credentials while maintaining a responsive UI; how the asynchronous task pipeline handles file uploads, polling coordination, and backend failure mitigation; how conversation state integrates with the polyglot persistence layer; and how the presentation layer routes and renders responses based on upstream AI adapters. The chapter concludes with an analysis of the core architectural tradeoffs governing the presentation layer's design.
+
+## 6.2 Server-Client Rendering Boundary
+
+The presentation layer utilizes the Next.js App Router to separate server-side data fetching and authentication from client-side UI reactivity. Rather than mixing credential management with UI execution, the architecture enforces a strict **Trust Boundary Pattern** that dictates where application logic is executed.
 
 ```mermaid
 flowchart TD
-    A[User Request: /ai] --> B{Next.js App Router}
-    B --> C[Server Components]
-    B --> D[Client Components 'use client']
-    
-    C --> E[Auth Verification]
-    C --> F[Fetch Session Metadata]
-    C --> G[Secure Supabase createClient]
-    
-    D --> H[React Message State]
-    D --> I[File Upload FormData]
-    D --> J[Auto-scroll Mutation Observer]
+    subgraph Browser ["Client-Side Browser Runtime (Reactivity Layer)"]
+        UI["Interactive UI Components<br>(State, Events, CV Upload)"]
+    end
+    subgraph Boundary ["Trust Boundary"]
+        BFF["Next.js BFF API Routes<br>(Auth & Session Validation)"]
+    end
+    subgraph Server ["Secure Server-Side Runtime (Access Layer)"]
+        SC["Next.js Server Components<br>(Initial Page Hydration)"]
+        BE["FastAPI Orchestrator<br>(Synchronous Inference Domain)"]
+    end
+
+    UI -->|"Interactive actions"| BFF
+    BFF -->|"Credentialed calls"| BE
+    SC -->|"Direct reads"| BE
 ```
 
-## 6.3 Real-Time Conversational Interface
-The `/ai` route implements a stateful conversational UI that mirrors the behavior of persistent websocket connections using strictly HTTP-based mechanisms.
+### 6.2.1 Secure Server Components
+The entry point for the conversational interface (`/ai`) runs exclusively within the secure server runtime. Server Components manage:
+- **Credential Isolation**: Performing tenant authentication and session verification without exposing database connection strings, security tokens, or environment keys to the browser.
+- **Initial Hydration**: Querying the FastAPI orchestrator directly during page generation to retrieve the user's active session metadata and recent conversation list. This eliminates the latency of a secondary client-side API round-trip during the initial load.
 
-### 6.3.1 Local State Management
-The UI state is governed by an array of `Message` objects tracking the `role` (user, assistant, or system), `content` (Markdown format), and `taskType` (e.g., standard response vs. interview roadmap). This abstraction allows the UI to dynamically alter rendering strategies based on the AI adapter's output format.
-To maintain the illusion of real-time responsiveness, user inputs are optimistically appended to the local state before the upstream request resolves. Concurrently, a temporary `system` message acts as an animated typing indicator.
+### 6.2.2 Reactive Client Components
+The interactive chat elements operate inside the client-side browser runtime, separated by the `"use client"` declaration boundary. Client Components handle:
+- **Interactive State**: Maintaining the local message feed, capture of file-upload payloads, and dynamic sidebar updates in response to user inputs.
+- **Micro-interactions**: Orchestrating local layout adjustments, typing indicators, and user-initiated actions that require immediate response without server latency.
 
-### 6.3.2 DOM Reactivity and Auto-Scrolling
-A dedicated `useEffect` hook monitors state transitions within the `messages` array. Upon mutation, it invokes `scrollIntoView` on a DOM reference anchored to the end of the message container. This guarantees that newly streamed content or appended responses immediately enter the user's viewport, mitigating manual scroll fatigue during lengthy AI generations.
+---
 
-## 6.4 Asynchronous ML Task Orchestration
-Extracting data from unstructured CVs and generating vector embeddings via Celery workers are computationally expensive operations that exceed standard HTTP timeout thresholds. To prevent connection drops and browser timeouts, the frontend implements an asynchronous long-polling pattern combined with a BFF proxy.
+## 6.3 Asynchronous Task Coordination Pipeline
 
-### 6.4.1 The Long-Polling Pattern
-When a user uploads a CV, the payload is transmitted to the Next.js API proxy (`/api/chatbot/upload`). The backend validates the binary, pushes a task to the Celery queue, and immediately returns an HTTP 200 response containing a `job_id` and a `PENDING` status.
-Upon receiving the `job_id`, the client component initiates a `pollJobStatus` loop. This loop sends an HTTP GET request to `/api/chatbot/status/:id` every 2 seconds, with a strict ceiling of 150 attempts (equating to a 5-minute maximum execution window).
+Processing unstructured resumes involves computationally heavy tasks (such as parsing, Named Entity Recognition, and embedding generation) that exceed standard HTTP timeout limits. To keep the UI responsive, the presentation layer orchestrates uploads and status checks through a decoupled, asynchronous pipeline mediated by a Backend-For-Frontend (BFF) proxy.
 
 ```mermaid
 sequenceDiagram
-    participant UI as Client Component
-    participant BFF as Next.js API Proxy
-    participant BE as FastAPI Backend
-    participant Q as Redis Queue
+    participant Client as Client Component (Browser)
+    participant BFF as Next.js BFF Proxy
+    participant Backend as FastAPI Orchestrator
+    participant Queue as Redis Broker / Celery Worker
     
-    UI->>BFF: POST /upload (FormData)
-    BFF->>BE: Forward File
-    BE->>Q: Dispatch Celery Task
-    BE-->>BFF: { job_id: "xyz", status: "PENDING" }
-    BFF-->>UI: { job_id: "xyz", status: "PENDING" }
+    Client->>BFF: 1. Ingest document (FormData)
+    BFF->>Backend: 2. Forward payload with user context
+    Backend->>Queue: 3. Dispatch Celery task & write file reference
+    Backend-->>BFF: 4. Return Job ID (PENDING)
+    BFF-->>Client: 5. Return normalized Job ID
     
-    loop Every 2 Seconds (Max 150 attempts)
-        UI->>BFF: GET /status/xyz
-        BFF->>BE: Check Redis Status
-        BE-->>BFF: { status: "PENDING" }
-        BFF-->>UI: { status: "PENDING" }
+    loop Status Polling
+        Client->>BFF: 6. Request job status (Job ID)
+        BFF->>Backend: 7. Check task execution state
+        Backend-->>BFF: 8. Return task status (PENDING/RUNNING)
+        BFF-->>Client: 9. Return normalized state
     end
     
-    Note over BE, Q: Worker finishes PhoBERT NER & Embeddings
+    Note over Backend, Queue: Celery worker completes PhoBERT NER & Qdrant embedding
     
-    UI->>BFF: GET /status/xyz
-    BFF->>BE: Check Redis Status
-    BE-->>BFF: { status: "COMPLETED", session_id: "...", resume_id: "..." }
-    BFF-->>UI: { status: "COMPLETED", session_id: "...", resume_id: "..." }
-    UI->>UI: Bind session context & Render response
+    Client->>BFF: 10. Request job status (Job ID)
+    BFF->>Backend: 11. Check task execution state
+    Backend-->>BFF: 12. Return COMPLETED (Session ID)
+    BFF-->>Client: 13. Return normalized state with context bindings
+    Client->>Client: 14. Bind session context & transition view
 ```
 
-### 6.4.2 Progressive UX Degradation
-To manage user expectations during prolonged ML inference tasks, the polling loop maintains an internal counter. If the loop reaches attempt 30 (approximately 60 seconds of waiting), the UI dynamically swaps the generic "Processing" placeholder with an extended message ("Trích xuất CV — bước này có thể mất tới 3 phút..."). This progressive status update reduces bounce rates associated with perceived application hangs.
+### 6.3.1 Ingestion and Task Dispatch
+When a user attaches a CV, the presentation layer captures the file, runs initial type checks, and transmits the payload to the BFF upload proxy. The BFF forwards the request to the FastAPI orchestrator, which archives the raw document in MongoDB GridFS, writes the file to the shared volume, and dispatches a background processing task to the Redis-backed Celery worker (as described in §1.4.2). The API immediately returns a unique job identifier, freeing the client from waiting for the extraction process to complete.
 
-### 6.4.3 Backend-For-Frontend (BFF) Firewall
-The `/api/chatbot/status/[jobId]/route.ts` API acts as a BFF firewall. It intercepts raw HTTP codes from the upstream FastAPI server and normalizes them. Even if the FastAPI backend returns a `404 Not Found` or crashes with a `500 Internal Server Error`, the BFF always returns an HTTP `200 OK` to the frontend, wrapping the failure within a JSON payload (e.g., `{ status: "ERROR", error: "upstream_error" }`). This ensures that the frontend React application never crashes due to unhandled HTTP exceptions and can gracefully render the specific error state within the chat UI. Once the polling loop detects a `COMPLETED` status, it parses the returned `session_id` and `resume_id` to bind the extracted CV context to the current conversation scope.
+### 6.3.2 Status Polling and Progress Tracking
+Upon receiving the job identifier, the client UI transitions to a processing state and enters a polling loop. The client queries the BFF status endpoint at regular intervals to trace task execution. If the task remains active, the UI displays dynamic progress updates to manage user expectations. If the task fails or times out, the client handles the transition gracefully, allowing the user to retry without losing conversation state.
 
-## 6.5 Conversation Sidebar and Session Management
+### 6.3.3 BFF Error Normalization Boundary
+The Next.js API routes act as an **Error Normalization Boundary** between the frontend and the upstream AI services. If the FastAPI backend encounters a database timeout, an out-of-memory error during inference, or is temporarily unreachable, the BFF intercepts these raw failures. Instead of exposing raw stack traces or throwing unhandled exceptions that could crash the React UI, the BFF normalizes these responses into a standard JSON error payload. This structure allows the client component to transition to a controlled error state and offer context-specific recovery paths.
 
-The `/ai` page implements a full conversation management system through a sidebar component that enables users to create, list, rename, archive, and delete conversations. The persistence layer for this feature is a MongoDB `conversations` collection, accessed through a dedicated `chatService.ts` module on the Next.js server side.
+---
 
-### 6.5.1 Conversation Data Model
+## 6.4 Conversation State Architecture
 
-Each conversation document in MongoDB encapsulates the complete message thread, ownership metadata, and lifecycle state:
+The conversational sidebar manages active session states, historical list retrieval, and session renaming or archiving. This layer interacts directly with Chapter 3's polyglot persistence architecture.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `_id` | ObjectId | MongoDB auto-generated unique identifier |
-| `userId` | String | Supabase Auth user ID (tenant isolation key) |
-| `title` | String | Auto-generated from first message (max 60 chars + ellipsis) |
-| `messages` | Array[ChatMessage] | Embedded array of all messages in the conversation |
-| `createdAt` | Date | Conversation creation timestamp |
-| `updatedAt` | Date | Last activity timestamp (updated on each new message) |
-| `sessionId` | String (optional) | Links to FastAPI backend session for CV context |
-| `isArchived` | Boolean | Soft-delete flag (default: `false`) |
+### 6.4.1 Conversation Lifecycles
+Conversation documents are persisted in MongoDB (as described in §3.5). The presentation layer manages these states through server-side CRUD endpoints:
+- **Title Generation**: To eliminate manual title entry, the system automatically derives a thread title from the initial user turn, trimming it to fit the sidebar constraints.
+- **Soft Deletion**: Archiving operations mark records as soft-deleted to keep the sidebar list clean while preserving historical records for potential restoration.
+- **Tenant Isolation**: Every CRUD operation is verified at the BFF layer by cross-checking the requester's authenticated identifier against the record owner, preventing cross-tenant access.
 
-The `ChatMessage` subdocument contains: `role` (user, assistant, or system), `content` (Markdown text), and `createdAt` (timestamp). Messages are embedded rather than referenced to ensure atomic reads — loading a conversation retrieves the complete thread in a single MongoDB query without joins.
+### 6.4.2 Session Identity Linkage
+When a conversation starts, it receives a client-side identity. If the user subsequently uploads a resume, the extraction pipeline binds the generated parsed context to a backend session ID (see §3.4). The presentation layer links these identifiers together. When a user switches between sidebar conversations, the client passes the linked backend session ID to the FastAPI orchestrator, allowing the backend to restore vector search parameters and retrieve CV embeddings from Qdrant without reprocessing the original document.
 
-### 6.5.2 Auto-Title Generation
+---
 
-When a conversation is created with an initial message, the title is automatically generated from the first message content. If the content exceeds 60 characters, it is truncated with an ellipsis (`…`). If no initial message is provided, the title defaults to "Cuộc hội thoại mới" (New conversation). This eliminates the need for users to manually name conversations while maintaining scannable sidebar entries.
+## 6.5 Response Rendering Pipeline
 
-### 6.5.3 CRUD Operations and Ownership Isolation
-
-The `chatService.ts` module exposes seven operations, each enforcing ownership isolation by filtering on `userId`:
-
-| Operation | Method | Ownership Check | Description |
-|-----------|--------|----------------|-------------|
-| `createConversation` | INSERT | Sets `userId` at creation | Creates new conversation with optional first message |
-| `getConversation` | FIND | `{ _id, userId, isArchived: false }` | Retrieves single conversation with full messages |
-| `listConversations` | FIND + SORT | `{ userId, isArchived: false }` | Returns paginated list (default 20), sorted by `updatedAt` descending |
-| `appendMessage` | FIND_AND_UPDATE | `{ _id, userId, isArchived: false }` | Pushes single message via `$push`, updates `updatedAt` |
-| `appendMessages` | FIND_AND_UPDATE | `{ _id, userId, isArchived: false }` | Pushes multiple messages atomically via `$push` + `$each` |
-| `updateConversationTitle` | FIND_AND_UPDATE | `{ _id, userId, isArchived: false }` | Allows manual title rename |
-| `deleteConversation` | DELETE_ONE | `{ _id, userId }` | Hard delete (permanent) |
-| `archiveConversation` | UPDATE_ONE | `{ _id, userId }` | Soft delete via `isArchived: true` |
-
-Every operation includes the `userId` in its query filter, ensuring that a user can never read, modify, or delete another user's conversations — even with a valid conversation ID. This provides defense-in-depth beyond the application-level authentication check.
-
-### 6.5.4 Session Linking
-
-The `updateSessionId()` operation links a MongoDB conversation to a FastAPI backend session by storing the 8-character session UUID in the conversation document. This linkage enables the frontend to restore CV context when a user returns to a previously active conversation — the stored `sessionId` is passed to the backend, which retrieves the associated resume data from its Redis/MongoDB session store.
-
-### 6.5.5 MongoDB Indexes
-
-Three indexes are created idempotently on the `conversations` collection to optimize the most frequent query patterns:
-
-| Index | Fields | Purpose |
-|-------|--------|---------|
-| User lookup | `{ userId: 1 }` | Filter all conversations belonging to a user |
-| Sort optimization | `{ updatedAt: -1 }` | Descending sort for "most recent first" sidebar ordering |
-| Archive filter | `{ isArchived: 1 }` | Exclude soft-deleted conversations from listings |
+The presentation layer uses a **Presentation Router Pattern** to handle structured outputs from the different backend AI adapters. The frontend acts as a template compiler, routing responses based on their declared type to ensure specialized data formats are rendered correctly.
 
 ```mermaid
-flowchart LR
-    subgraph "Sidebar UI"
-        LIST["Conversation List"]
-        NEW["+ New Conversation"]
-        RENAME["Rename"]
-        DEL["Delete / Archive"]
-    end
-
-    subgraph "Next.js Server (chatService.ts)"
-        CS["chatService"]
-        MONGO[("MongoDB<br/>conversations")]
-    end
-
-    subgraph "FastAPI Backend"
-        API["chatbot-api"]
-        REDIS[("Redis<br/>session:{id}")]
-    end
-
-    NEW -->|"createConversation(userId)"| CS
-    LIST -->|"listConversations(userId)"| CS
-    RENAME -->|"updateConversationTitle()"| CS
-    DEL -->|"deleteConversation() / archiveConversation()"| CS
-    CS <-->|"CRUD"| MONGO
-
-    CS -->|"updateSessionId(convId, sessionId)"| MONGO
-    API -->|"Session data"| REDIS
+flowchart TD
+    Env["JSON Response Envelope<br>(Markdown, Metadata, Task Type)"] --> Router{"Presentation Router"}
+    
+    Router -->|search_jobs| JobCards["Structured Job Cards<br>(Salary, Location, Direct Link)"]
+    Router -->|assess_resume / general_response| MD["Markdown Coach Prose<br>(Paragraphs, Lists, Inline Code)"]
+    Router -->|match_jobs| Gap["Skill-Gap Analysis<br>(Matched vs. Missing Lists)"]
+    Router -->|interview_prep| Tables["Markdown Tables<br>(Question-Rubric Matrices)"]
+    Router -->|needs_resume| Widget["Contextual Actions<br>(CV Upload Prompt)"]
 ```
 
-## 6.6 File Upload UX and Validation
+### 6.5.1 Task-Type Presentation Routing
+The backend returns a unified JSON response envelope containing the text payload, execution metadata, and a classification label (`task_type`). The presentation layer parses this label and routes the payload to the appropriate UI layout:
+- **Coaching and Conversations** (`assess_resume`, `general_response`): Routed to the standard Markdown renderer, displaying paragraphs, bold highlights, lists, and inline code generated by Adapter B.
+- **Structured Preparation Matrices** (`interview_prep`): Formatted as multi-column Markdown tables that align interview questions, candidate evaluation rubrics, and recommended study paths generated by Adapter C.
+- **Job Search Listings** (`search_jobs`): Bypasses standard Markdown rendering. The UI compiles the raw search results from Elasticsearch into structured, interactive job cards containing salary badges, locations, and direct application links.
+- **Skill Gap Assessments** (`match_jobs`): Renders visual lists that compare candidate skills against job requirements, grouping them into matched and missing lists for easy scanning.
+- **Contextual Actions** (`needs_resume`): Renders helper prompts and action buttons (such as triggering the file attachment workflow) when a resume is required but has not yet been bound to the session.
 
-The file upload feature allows users to submit CVs directly within the chat interface. The system enforces validation at both the frontend and backend layers to prevent unsupported or oversized files from consuming processing resources.
+---
 
-### 6.6.1 Supported File Formats
+## 6.6 Design Tradeoffs
 
-The backend validates the file extension against a whitelist of supported document and image formats:
+### 6.6.1 Asynchronous Long-Polling vs. WebSockets vs. SSE
+The choice of client-polling over persistent connection protocols (such as WebSockets or Server-Sent Events) represents a trade of connection overhead for system simplicity:
+- **WebSockets and SSE**: Offer lower latency and real-time push capability, but they require persistent server connections. This complicates load balancing, increases memory consumption at the BFF layer under high concurrent loads, and requires complex client-side reconnection logic.
+- **Long-Polling**: Operates over standard, stateless HTTP requests. It works out-of-the-box with serverless and edge infrastructure, integrates with standard authentication models, and avoids holding open long-lived sockets. Polling every two seconds introduces negligible network overhead for the relatively low frequency of CV uploads, while drastically simplifying the BFF deployment.
 
-| Format | Extension | Processing Method |
-|--------|-----------|------------------|
-| PDF (text-based) | `.pdf` | PyMuPDF text extraction |
-| PDF (scanned/image) | `.pdf` | OCR fallback via Tesseract (Vietnamese + English) |
-| Word Document | `.docx`, `.doc` | python-docx paragraph extraction |
-| Image (photo of CV) | `.png`, `.jpg`, `.jpeg` | Tesseract OCR (Vietnamese + English) |
+### 6.6.2 BFF Error Normalization vs. Upstream Proxying
+The error normalization boundary adds development complexity but significantly increases frontend resilience:
+- **Upstream Proxying**: Directly forwarding raw backend responses reduces BFF code and simplifies debugging during development, but it exposes the client to raw framework errors, database tracebacks, or system timeouts.
+- **BFF Error Normalization**: Intercepting and wrapping all upstream exceptions into standardized frontend states ensures the client UI never crashes due to unexpected backend failures. This trade prioritizes user-facing durability and graceful degradation over raw error visibility.
 
-Files with extensions outside this whitelist receive an HTTP 400 `unsupported_file_type` error. The OCR fallback for scanned PDFs is triggered automatically when PyMuPDF extracts an empty text string, rendering each page as a 200-DPI image before passing it to Tesseract with the `vie+eng` language pack.
-
-### 6.6.2 Size Constraints
-
-The maximum file size is enforced at 20 MB (`20 × 1,024 × 1,024` bytes). Files exceeding this limit receive an HTTP 400 `file_too_large` error. Empty files (zero bytes after reading) are similarly rejected with `empty_file`.
-
-### 6.6.3 Upload-to-Processing Flow
-
-The complete upload lifecycle spans four system boundaries:
-
-1. **Frontend**: User selects file via the attachment button (📎) in the chat input area. The file is wrapped in a `FormData` object along with the current `session_id` and `user_id`.
-2. **BFF Proxy**: The Next.js API route (`/api/chatbot/upload`) forwards the multipart form data to the FastAPI backend, adding any necessary authentication headers.
-3. **FastAPI Backend**: Validates the file, writes it to the `shared_tmp` volume, uploads the raw binary to MongoDB GridFS, generates a `job_id`, and dispatches a Celery task with the file path.
-4. **Celery Worker**: Reads the file from `shared_tmp`, runs the Phase 2–3 extraction pipeline, stores embeddings in Qdrant, updates the session with resume data, and marks the job as `COMPLETED`.
-
-The frontend then enters the long-polling loop (§6.4.1) to track the extraction progress.
-
-## 6.7 Markdown Rendering and Task-Type Differentiation
-
-The chat interface renders assistant responses as rich Markdown content, with the rendering strategy dynamically adapted based on the `taskType` field returned in the backend's response envelope.
-
-### 6.7.1 Response Envelope Structure
-
-Every response from the FastAPI backend follows a consistent JSON envelope:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `response` | String | Markdown-formatted assistant message |
-| `task_type` | String | Identifies the tool that generated the response |
-| `session_id` | String | Active session identifier |
-| `metadata` | Object | Tool-specific data (latency, parameters, hit counts) |
-
-### 6.7.2 Task-Type Rendering Strategies
-
-The `taskType` determines how the frontend renders the response content:
-
-| Task Type | Source Adapter | Rendering Strategy |
-|-----------|---------------|-------------------|
-| `search_jobs` | Elasticsearch (direct) | Structured job cards with title, company, salary, location badges |
-| `assess_resume` | Adapter B (HR Coach) | Free-form Markdown prose with coaching feedback, bullet points, and emphasis |
-| `match_jobs` | Adapter B (HR Coach) | Skill-gap analysis with matched/missing skill lists |
-| `interview_prep` | Adapter C (Structured Gen) | Formatted tables with interview questions, rubric criteria, or learning roadmaps |
-| `general_response` | Adapter B (HR Coach) | Conversational Markdown with paragraphs and lists |
-| `needs_resume` | System (no adapter) | Styled prompt message asking user to upload a CV |
-| `upload` | Celery Worker | Extraction summary with skill/experience counts and quality score |
-
-This task-type differentiation ensures that the UI can provide specialized formatting for structured outputs (such as job search results with salary badges) while gracefully falling back to standard Markdown rendering for free-form coaching responses. The frontend Markdown renderer supports tables, headers, bullet lists, bold/italic emphasis, and inline code — covering the full range of formatting patterns produced by the three SLM adapters.
-
+### 6.6.3 Embedded Messages vs. Client-Side State Management
+Managing conversation state directly through server-side MongoDB reads (leveraging the embedded messages structure in §3.6.3) trades client-side flexibility for structural simplicity:
+- **Client-Side State Management**: Using complex global state containers allows for advanced offline editing and client-side filtering, but it increases code bundle sizes and introduces consistency issues when sync operations fail.
+- **Embedded Messages**: Keeps the client state stateless. Clicking a conversation fetches the entire thread in a single, fast document query. The UI remains simple, reactivity is handled by React's local state, and the server retains the authoritative conversation history, ensuring a consistent user experience across multiple devices.

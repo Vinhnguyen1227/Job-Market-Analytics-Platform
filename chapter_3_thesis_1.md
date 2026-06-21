@@ -1,298 +1,149 @@
-# Chapter 3: Data Persistence and Session Management for AI Chatbot
+# Chapter 3: Polyglot Persistence Architecture
 
-This chapter details the data layer architecture designed specifically for the AI chatbot component of the CareerIntel platform. The system leverages a polyglot persistence approach, utilizing MongoDB, Redis, Supabase, and Qdrant to manage conversational state, cache frequent queries, store persistent user profiles, and perform semantic vector searches. The following diagram illustrates the complete data flow across all four database systems:
+## 3.1 Overview
 
-```mermaid
-flowchart TB
-    subgraph "FastAPI Orchestrator"
-        SERVER["server.py"]
-        SSTORE["SessionStore"]
-        MCLIENT["MongoClient"]
-    end
+The AI chatbot operates across four distinct data access patterns that no single database can serve optimally: sub-millisecond reads of active session state, flexible document queries over unstructured conversation history, high-dimensional similarity search across vectorized resumes, and relational integrity for persistent user profiles with row-level tenant isolation. Rather than forcing these patterns into a single storage engine — accepting poor performance in at least three of the four — the system adopts a polyglot persistence strategy: each database is selected for the access pattern it was designed to optimize.
 
-    subgraph "Celery Worker"
-        WORKER["worker_tasks.py"]
-        BRIDGE["pipeline_bridge.py"]
-    end
+This chapter presents the architectural rationale behind the four-database topology, the data flows that connect them, and the design tradeoffs that govern their interaction. The focus is on three cross-cutting concerns: how session data moves through a lifecycle of creation, hydration, eviction, and restoration across database boundaries; how conversation state transforms from individual messages into a managed context window with extractive summarization; and how resume data flows from raw binary uploads through increasingly structured representations until it reaches a vector-searchable form. Chapter 1 introduced the Persistent Intelligence Domain as one of three computational domains; this chapter elaborates that domain's internal architecture in depth.
 
-    subgraph "Data Tier"
-        REDIS[("Redis<br/>Session Cache<br/>History List<br/>Job Tracker")]
-        MONGO[("MongoDB<br/>History Collection<br/>Sessions Collection<br/>GridFS")]
-        SUPA[("Supabase/PostgreSQL<br/>user_resume_data<br/>+ RLS Policies")]
-        QDRANT[("Qdrant<br/>resumes Collection<br/>4 Named Vectors")]
-    end
+Redis provides the in-memory session cache — the first tier that every read request hits before falling through to slower, more durable stores. MongoDB serves as the durable document store for conversation history, session metadata, and raw binary files via GridFS, providing the source-of-truth that outlives Redis TTL eviction. Qdrant stores dense vector embeddings that enable semantic search and skill-gap analysis, capabilities that neither Redis nor MongoDB can provide. Supabase (PostgreSQL) provides the persistent, user-scoped storage layer with relational integrity and database-level access control, ensuring that resume data survives across chatbot sessions and that tenant isolation is enforced independently of application logic.
 
-    SERVER -->|"Dual-write session"| SSTORE
-    SSTORE -->|"HSET session:{id}"| REDIS
-    SSTORE -->|"update_session_cv()"| MONGO
-    SSTORE -->|"RPUSH + LTRIM history"| REDIS
-    SSTORE -->|"save_history_message()"| MONGO
+## 3.2 Session Lifecycle Pipeline
 
-    SERVER -->|"Supabase fallback"| SUPA
-
-    WORKER -->|"set_resume()"| SSTORE
-    WORKER -->|"upsert_user_resume()"| SUPA
-    BRIDGE -->|"validate_and_store()"| QDRANT
-    WORKER -->|"upload_pdf()"| MONGO
-
-    SERVER -.->|"get_resume() cache miss"| MONGO
-    SSTORE -.->|"get_session_cv() fallback"| MONGO
-    SERVER -.->|"get_user_resume() fallback"| SUPA
-```
-
-## 3.1 MongoDB for Unstructured Conversation History
-
-The chatbot handles highly unstructured and dynamic data, making a NoSQL document database like MongoDB the ideal choice for storing conversation history. The `MongoClient` wrapper class provides all database operations through the asynchronous Motor driver.
-
-### 3.1.1 Async I/O with Motor
-
-To ensure high performance and non-blocking operations within the FastAPI backend, the system utilizes `AsyncIOMotorClient`. This allows the application to handle multiple concurrent database requests efficiently, which is critical for real-time chat interactions. The client is instantiated as a module-level singleton (`mongo_client = MongoClient()`) and lazily connects on first use, preventing connection pool exhaustion during import-time initialization.
-
-### 3.1.2 History Collection Schema
-
-Each turn in the chat conversation is stored as an individual document in the `history` collection. The schema includes the session identifier, the role (user or assistant), the message content, and a Unix timestamp:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `session_id` | String | Links message to a chatbot session (8-char UUID) |
-| `role` | String | Message author: `"user"` or `"assistant"` |
-| `content` | String | Full message text (Markdown format for assistant) |
-| `timestamp` | Float | Unix timestamp for chronological ordering |
-
-To optimize retrieval speed when loading a user's chat history, a compound index is implemented on the session identifier and timestamp fields `(session_id, 1), (timestamp, 1)`. This index enables MongoDB to perform a covered query: given a session ID, it retrieves all messages in chronological order using a single index scan without requiring a sort operation. The index is created idempotently during the `connect()` method, ensuring it exists regardless of whether the collection was freshly created or already populated.
-
-### 3.1.3 Sessions Collection Schema
-
-Session metadata — including parsed resume data and conversation summaries — is stored in a separate `sessions` collection with a unique index on `session_id`:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `session_id` | String (unique) | Primary identifier, matches Redis session key |
-| `resume_id` | String | Qdrant point ID of the stored resume vector |
-| `resume_dict` | Object | Full canonical resume JSON (from Phase 2 extraction) |
-| `resume_name` | String | Original uploaded filename |
-| `conversation_summary` | String | Extractive summary of dropped conversation history |
-
-The `conversation_summary` field is particularly important for long-running conversations. When the Context Window Manager (§7.5 in Chapter 7) trims older messages to fit within the SLM's token budget, it generates an extractive summary of the dropped messages. This summary is persisted to MongoDB via `save_conversation_summary()` and retrieved on subsequent requests via `get_conversation_summary()`, ensuring that the chatbot retains awareness of earlier conversational context even after individual messages have been evicted from the active window.
-
-### 3.1.4 GridFS for Raw File Storage
-
-Users frequently upload PDF resumes for analysis. MongoDB's GridFS, accessed via `AsyncIOMotorGridFSBucket`, provides a robust mechanism for storing these raw, potentially large binary files. The `upload_pdf()` method streams the file content into GridFS chunks with metadata linking it to the originating session:
-
-| GridFS Metadata Field | Value |
-|----------------------|-------|
-| `session_id` | The chatbot session that triggered the upload |
-| `content_type` | `"application/pdf"` (fixed for CV uploads) |
-
-This metadata enables future retrieval of the original binary file for re-extraction or audit purposes, independent of the parsed JSON representation stored in the session.
-
-## 3.2 Dual-Write Session Management (Redis + MongoDB)
-
-Session management requires both extreme speed for real-time interaction and durability to prevent data loss. This is achieved through a dual-write strategy using Redis and MongoDB, implemented in the `SessionStore` class.
-
-### 3.2.1 Redis Cache Layer
-
-Redis serves as the primary, low-latency datastore for active sessions. Session data is stored using Redis Hashes, keyed by the session identifier (e.g., `session:{id}`). A Time-To-Live (TTL) is configured for 24 hours (`SESSION_TTL = 86400`), ensuring that inactive sessions are automatically purged to conserve memory. The session hash contains three fields:
-
-| Redis Hash Field | Content |
-|-----------------|---------|
-| `resume_id` | Qdrant point ID (empty string if no CV uploaded) |
-| `resume_dict` | JSON-serialized canonical resume |
-| `resume_name` | Original filename of the uploaded CV |
-
-### 3.2.2 Session Data Dual-Write
-
-When a session is updated via `set_resume()`, the data is written to both datastores in sequence:
-
-1. **Redis write**: `HSET session:{id}` with the serialized resume data, followed by `EXPIRE` to refresh the 24-hour TTL.
-2. **MongoDB write**: `update_session_cv()` performs an `upsert` operation on the `sessions` collection, creating the document if it doesn't exist or updating it if it does.
-
-If a session is requested but not found in Redis (a cache miss due to TTL expiration or Redis restart), the `get_resume()` method seamlessly falls back to MongoDB via `get_session_cv()` to retrieve and serve the data.
-
-### 3.2.3 Conversation History Dual-Write
-
-Conversation history follows a separate dual-write pattern through the `append_history()` method:
-
-1. **MongoDB write** (primary): Each message is inserted as an individual document in the `history` collection via `save_history_message()`.
-2. **Redis write** (cache): The message is serialized to JSON and appended to a Redis List at key `session:{id}:history` using `RPUSH`. The list is then trimmed with `LTRIM` to retain only the most recent messages (`MAX_HISTORY_TURNS × 2 = 200` messages), preventing unbounded memory growth.
-
-This dual-write ensures that the full conversation history is always available in MongoDB for session restoration, while the most recent turns are cached in Redis for fast retrieval during active conversations.
-
-### 3.2.4 Context Window Integration
-
-The `SessionStore` integrates directly with the Context Window Manager through the `get_contextualized_history()` method, creating a bridge between the persistence layer and the SLM's token budget constraints:
-
-1. Retrieve full history from MongoDB via `get_history()`.
-2. Pass the full history to `ContextWindowManager.build_context()`, which trims messages to fit within the 2,000-token budget.
-3. If messages were trimmed, save the generated extractive summary to MongoDB via `save_conversation_summary()`.
-4. If no trimming was needed, attempt to retrieve an existing summary from MongoDB.
-5. Return the tuple `(trimmed_history, summary_or_none)` to the chat endpoint.
-
-This integration ensures that the session layer is aware of token budget constraints and transparently manages summary persistence without requiring the API endpoint to coordinate between multiple subsystems.
+A chatbot session passes through five distinct states as it moves across the persistence layer. Understanding this lifecycle is essential to understanding why the system writes the same data to two databases simultaneously and why it maintains a three-tier fallback chain for reads.
 
 ```mermaid
-sequenceDiagram
-    participant App as FastAPI App
-    participant SS as SessionStore
-    participant Redis as Redis Cache
-    participant Mongo as MongoDB
-    participant CWM as ContextWindowManager
-
-    Note over App, CWM: Dual-Write Operation (set_resume)
-    App->>SS: set_resume(session_id, resume_id, resume_dict)
-    SS->>Redis: HSET session:{id} (Hash)
-    SS->>Redis: EXPIRE session:{id} 86400
-    SS->>Mongo: update_session_cv() (upsert)
-
-    Note over App, CWM: History Append (append_history)
-    App->>SS: append_history(session_id, role, content)
-    SS->>Mongo: save_history_message() (insert)
-    SS->>Redis: RPUSH session:{id}:history
-    SS->>Redis: LTRIM -200, -1
-
-    Note over App, CWM: Contextualized Read
-    App->>SS: get_contextualized_history(session_id)
-    SS->>Mongo: get_history(session_id)
-    Mongo-->>SS: Full history (N messages)
-    SS->>CWM: build_context(history, budget=2000)
-    CWM-->>SS: (trimmed_history, summary)
-    SS->>Mongo: save_conversation_summary(summary)
-    SS-->>App: (trimmed_history, summary)
-
-    Note over App, CWM: Read (Cache Miss Fallback)
-    App->>SS: get_resume(session_id)
-    SS->>Redis: HGETALL session:{id}
-    Redis-->>SS: Null (expired)
-    SS->>Mongo: get_session_cv(session_id)
-    Mongo-->>SS: Resume data
+stateDiagram-v2
+    [*] --> Created: User opens chat
+    Created --> Active: Resume uploaded or first message
+    Active --> Active: Subsequent messages (dual-write)
+    Active --> Evicted: Redis TTL expires (24h)
+    Evicted --> Restored: User returns (MongoDB fallback)
+    Restored --> Active: Re-cached in Redis
+    Active --> Persistent: User profile saved (Supabase)
+    Persistent --> Active: New session + Supabase fallback
 ```
 
-## 3.3 Supabase for Persistent User Profiles
+**Created → Active**: When a user initiates a conversation or uploads a resume, the system creates a session entry in Redis with a 24-hour time-to-live. If a resume is attached, the parsed JSON is bound to the session alongside the Qdrant vector identifier and the original filename. This initial write also propagates to MongoDB through an upsert operation, establishing the durable copy that will outlive the cache.
 
-While MongoDB handles ephemeral session-scoped chat data, Supabase (PostgreSQL) is utilized for persistent, user-scoped data that survives across multiple chatbot sessions.
+**Active → Active (Dual-Write)**: Every session update — new resume binding, conversation turn, context summary — writes to both Redis and MongoDB in sequence. Redis provides the sub-millisecond read latency required for real-time chat interactions; MongoDB provides the durability guarantee that survives cache eviction and service restarts. The system prioritizes write consistency over write performance: both writes must succeed before the operation returns, ensuring the durable store never lags behind the cache.
 
-### 3.3.1 Table Schema
+**Active → Evicted → Restored**: When a session's 24-hour TTL expires in Redis, the data is silently evicted. If the user returns, the system detects the cache miss and transparently falls through to MongoDB, retrieves the session data, re-caches it in Redis with a fresh TTL, and resumes the conversation as though no interruption occurred. This fallback is invisible to the user and to the upstream chat endpoint — the session store abstracts the recovery behind a single read interface.
 
-The platform stores analyzed resume data in a structured `user_resume_data` table with the following schema:
+**Active → Persistent**: For authenticated users, resume data is additionally persisted to Supabase (PostgreSQL), creating a user-scoped record that survives not just cache eviction but session expiration entirely. This enables the third fallback tier: when a returning user starts a new chatbot session, the system checks Supabase for previously analyzed resume data and injects it into the new session context, eliminating the need for re-upload.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `user_id` | UUID | PRIMARY KEY, REFERENCES `auth.users(id)` ON DELETE CASCADE | Links to Supabase Auth user |
-| `resume_json` | JSONB | NOT NULL | Full canonical resume JSON from Phase 2 extraction |
-| `quality_score` | INTEGER | DEFAULT 0 | Overall CV quality score (0–100) from Phase 3 validation |
-| `num_experience` | INTEGER | DEFAULT 0 | Count of work experience entries |
-| `num_skills` | INTEGER | DEFAULT 0 | Count of extracted skill items |
-| `source_file_name` | TEXT | — | Original uploaded filename |
-| `extracted_at` | TIMESTAMPTZ | DEFAULT NOW() | Timestamp of first extraction |
-| `updated_at` | TIMESTAMPTZ | DEFAULT NOW() | Timestamp of most recent update |
-
-The `ON DELETE CASCADE` constraint ensures that when a user account is deleted from Supabase Auth, their resume data is automatically purged, maintaining referential integrity without requiring application-level cleanup logic.
-
-### 3.3.2 Row Level Security (RLS)
-
-To ensure strict data privacy, four Row Level Security policies are enforced at the database level, guaranteeing tenant isolation without relying on application-level authorization checks:
-
-| Policy | Operation | Rule | Purpose |
-|--------|-----------|------|---------|
-| Users can view own resume data | SELECT | `auth.uid() = user_id` | Read isolation |
-| Users can insert own resume data | INSERT | `auth.uid() = user_id` (WITH CHECK) | Write isolation |
-| Users can update own resume data | UPDATE | `auth.uid() = user_id` (USING + WITH CHECK) | Modification isolation |
-| Users can delete own resume data | DELETE | `auth.uid() = user_id` | Deletion isolation |
-
-Each policy uses Supabase's `auth.uid()` function, which extracts the authenticated user's UUID from the JWT token, ensuring that even direct database queries through the Supabase client SDK are automatically filtered to the requesting user's data.
-
-The backend chatbot service bypasses these RLS policies by connecting with the `SUPABASE_SERVICE_ROLE_KEY` rather than the user's JWT. This elevated-privilege access is required because the Celery worker performs server-side writes (via `upsert_user_resume()`) on behalf of users during asynchronous CV extraction, where no user JWT is available in the processing context.
-
-### 3.3.3 Cross-Database Fallback Pattern
-
-The system implements a three-tier fallback chain to locate a user's resume data, prioritizing speed over durability:
-
-1. **Redis** (fastest): Check `session:{id}` hash for `resume_id` and `resume_dict`.
-2. **MongoDB** (durable): If Redis returns null, query `sessions` collection via `get_session_cv()`.
-3. **Supabase** (persistent): If both Redis and MongoDB lack data for the session, and the request includes a `user_id`, query `user_resume_data` via `get_user_resume()`.
-
-This fallback is implemented in the chat endpoint: when a `user_id` is present in the request but the current session has no resume, the server queries Supabase for the user's persistent resume and injects it into the session context. This enables returning users to continue receiving CV-aware responses without re-uploading their resume, even when starting a new chatbot session.
-
-## 3.4 Qdrant for Semantic Vector Search
-
-To enable the chatbot to understand the semantic meaning of resumes and job descriptions, the system integrates Qdrant, a high-performance vector database optimized for approximate nearest-neighbor search using HNSW indexing.
-
-### 3.4.1 Collection Architecture
-
-The Qdrant collection named `resumes` employs a multi-vector architecture where each resume is stored as a single Qdrant point containing four named vectors. Each vector is a 1,024-dimensional dense embedding generated by the BGE-M3 model, using cosine similarity as the distance metric:
-
-| Vector Name | Content Embedded | Downstream Usage |
-|-------------|-----------------|-----------------|
-| `experience` | Concatenated work experience entries | Experience-based resume matching |
-| `skills` | Flattened skill categories and individual skills | Skill-gap analysis via `compare_skills()` |
-| `education` | Education entries with institutions and degrees | Education-level filtering |
-| `full_profile` | Concatenation of all resume sections | Overall resume similarity search |
-
-The collection is created with explicit `VectorParams` for each named vector:
+The three-tier fallback chain — Redis → MongoDB → Supabase — reflects a deliberate architectural ordering from fastest-but-ephemeral to slowest-but-permanent. Each tier serves a different temporal scope: Redis holds active sessions (minutes to hours), MongoDB holds session history (days to weeks), and Supabase holds user profiles (indefinitely).
 
 ```mermaid
-flowchart TB
-    subgraph "Qdrant Point (per resume)"
-        subgraph "4 Named Vectors (dim=1024, cosine)"
-            V1["experience"]
-            V2["skills"]
-            V3["education"]
-            V4["full_profile"]
-        end
-
-        subgraph "Payload (metadata + full JSON)"
-            P1["doc_id: UUID"]
-            P2["name, email, location"]
-            P3["quality_score: 0–100"]
-            P4["is_valid, is_bad_cv: boolean"]
-            P5["experience_count, education_count"]
-            P6["seniority: Intern|Junior|Mid|Senior|Manager|Director"]
-            P7["skills_flat: string array"]
-            P8["role_config, role_domain"]
-            P9["resume: full canonical JSON"]
-            P10["validation_report: quality breakdown"]
-        end
-    end
-
-    BGE["BGE-M3 Embedder<br/>(1024-dim)"] -->|"Section text → vector"| V1
-    BGE -->|"Section text → vector"| V2
-    BGE -->|"Section text → vector"| V3
-    BGE -->|"Full text → vector"| V4
+flowchart LR
+    REQ["Session<br>read request"] --> R{Redis<br>cache hit?}
+    R -->|Hit| RES["Return<br>session data"]
+    R -->|Miss| M{MongoDB<br>session exists?}
+    M -->|Found| RECACHE["Re-cache in Redis<br>+ return data"]
+    M -->|Not found| S{Supabase<br>user profile?}
+    S -->|Found| INJECT["Inject into<br>new session<br>+ return data"]
+    S -->|Not found| EMPTY["No resume<br>context available"]
 ```
 
-This multi-vector design enables aspect-specific searches. For example, the `match_jobs` tool queries only the `skills` vector to find resumes with similar skill profiles, while a general resume search uses the `full_profile` vector for holistic similarity.
+## 3.3 Conversation State Machine
 
-### 3.4.2 Payload Structure
+Conversation data undergoes a series of transformations as it moves through the persistence layer, progressing from individual user messages into a managed context window that fits within the small language model's token budget. This transformation pipeline is central to the system's ability to maintain coherent multi-turn conversations despite the base model's limited context capacity.
 
-Each Qdrant point carries a rich payload alongside its vectors, enabling filtered retrieval without requiring a secondary database query:
+```mermaid
+flowchart TD
+    subgraph "Raw Input"
+        A["User message<br>(natural language string)"]
+    end
 
-| Payload Field | Type | Source |
-|--------------|------|--------|
-| `doc_id` | String | UUID generated during Phase 3 or from metadata |
-| `name` | String | `personal_info.name` from canonical resume |
-| `email` | String | `personal_info.email` from canonical resume |
-| `location` | String | `personal_info.location` from canonical resume |
-| `quality_score` | Integer | Overall quality score from Phase 3 validation |
-| `is_valid` | Boolean | Whether the resume passed validation checks |
-| `is_bad_cv` | Boolean | Quality score below threshold |
-| `experience_count` | Integer | Number of work experience entries |
-| `education_count` | Integer | Number of education entries |
-| `seniority` | String | Highest inferred seniority level across all experience |
-| `skills_flat` | Array[String] | All skills flattened from nested category structure |
-| `role_config` | String | Synthetic role configuration (if generated CV) |
-| `role_domain` | String | Industry domain classification |
-| `resume` | Object | Complete canonical resume JSON |
-| `validation_report` | Object | Full quality score breakdown with per-section scores |
+    subgraph "Persisted Turn"
+        B["MongoDB document<br>(session_id, role,<br>content, timestamp)"]
+        C["Redis list entry<br>(bounded to last<br>200 messages)"]
+    end
 
-The `skills_flat` field deserves special attention. It transforms the nested skill category structure (`[{category: "Programming", skills: ["Python", "Java"]}, ...]`) into a flat array (`["Python", "Java", ...]`), enabling the `compare_skills()` method in the chatbot's data client to perform efficient token-overlap comparisons between a user's skills and a job description text.
+    subgraph "Active Context Window"
+        D["Trimmed history<br>(fits within 2,000-token<br>SLM budget)"]
+    end
 
-### 3.4.3 Skill-Gap Analysis
+    subgraph "Compressed Memory"
+        E["Extractive summary<br>(persisted to MongoDB,<br>injected into future prompts)"]
+    end
 
-The chatbot's `match_jobs` tool leverages the Qdrant payload (not the vector search) for skill-gap analysis. The `compare_skills()` method in the `ResumeQdrantClient` retrieves the `skills_flat` array from the stored resume point and performs a naive but effective token-overlap comparison against the job description text:
+    A -->|"Dual-write<br>(append)"| B
+    A -->|"Dual-write<br>(append + trim)"| C
+    B -->|"Full history<br>retrieval"| D
+    D -->|"Older messages<br>trimmed"| E
+    E -.->|"Prepended to<br>next context build"| D
+```
 
-1. Retrieve the user's skill set from Qdrant payload.
-2. For each skill, check if the skill name appears as a substring in the lowercased JD text.
-3. Partition skills into `present_in_jd` (matched) and `missing` (not found).
-4. Pass the structured gap analysis to Adapter B (HR Coach) for natural-language interpretation.
+**Raw Input → Persisted Turn**: Each user or assistant message is appended to both MongoDB (as an individual document with session linkage and chronological timestamp) and Redis (as a serialized entry in a bounded list). The MongoDB copy is the source-of-truth: it retains the complete conversation history without length constraints. The Redis copy is a performance optimization: it caches the most recent turns for fast retrieval during active conversations, automatically discarding older entries to prevent unbounded memory growth.
 
-This approach prioritizes precision over recall: it only identifies skills the user already has that appear in the JD, avoiding false positives from semantic similarity that might confuse the SLM's downstream reasoning.
+The MongoDB collection uses a compound index on session identifier and timestamp, enabling chronologically ordered retrieval of an entire conversation thread through a single index scan. This index design eliminates the need for a sort operation at query time — the storage layer returns messages in the order they were spoken.
+
+**Persisted Turn → Active Context Window**: When the chat endpoint prepares a prompt for the language model, it retrieves the full conversation history from MongoDB and passes it through the Context Window Manager (detailed in Chapter 7). The manager evaluates the total token count against the model's 2,000-token budget and trims older messages from the beginning of the history until the remaining turns fit within the budget.
+
+**Active Context Window → Compressed Memory**: When messages are trimmed, they are not simply discarded. The Context Window Manager generates an extractive summary of the dropped messages — a compressed representation that preserves the key topics, decisions, and user preferences from earlier in the conversation. This summary is persisted to MongoDB and prepended to the context window on subsequent requests, giving the model awareness of conversational history that has been evicted from the active window.
+
+This summary-and-reinject pattern is the architectural answer to a fundamental constraint: the SLM's limited context window cannot hold long conversations, but users expect conversational continuity across dozens of turns. Rather than truncating silently (losing context) or paginating (adding complexity), the system compresses old context into a summary that occupies a fraction of the original token count while preserving the information most relevant to ongoing dialogue.
+
+## 3.4 Resume Data Pipeline
+
+Resume data follows the most complex cross-database flow in the system, touching all four databases as it transforms from an unstructured binary file into a searchable, AI-ready vector representation. This pipeline is the persistence-layer counterpart to the four-stage CV Upload Pipeline described in Chapter 1 (§1.5.2) — where that section focused on the computational transformations (parsing, NER, embedding), this section traces the data's journey through the storage layer.
+
+```mermaid
+flowchart TD
+    subgraph "Stage 1: Archival"
+        A["Binary file<br>(PDF / DOCX / Image)"] --> B["GridFS<br>(MongoDB)<br>Raw binary archive"]
+    end
+
+    subgraph "Stage 2: Session Binding"
+        C["Canonical Resume JSON<br>(from extraction pipeline)"] --> D["Redis session<br>(hot cache, 24h TTL)"]
+        C --> E["MongoDB session<br>(durable copy)"]
+    end
+
+    subgraph "Stage 3: User Profile"
+        F["Structured profile<br>(quality score,<br>skill counts)"] --> G["Supabase/PostgreSQL<br>(user-scoped,<br>persistent)"]
+    end
+
+    subgraph "Stage 4: Vectorization"
+        H["4 text sections<br>(experience, skills,<br>education, full profile)"] --> I["BGE-M3 encoder<br>(1024-dim dense<br>embeddings)"]
+        I --> J["Qdrant<br>(4 named vectors<br>+ metadata payload)"]
+    end
+
+    B -.->|"Extraction pipeline<br>(Celery worker)"| C
+    D & E -.->|"If authenticated"| F
+    C -.->|"Section text<br>extraction"| H
+```
+
+**Archival (MongoDB GridFS)**: The raw binary file is archived in MongoDB's GridFS immediately upon upload, before any processing begins. This archival serves two purposes: it provides an immutable record of the original document for audit and re-extraction, and it decouples the binary storage concern from the extraction pipeline — if extraction fails or needs to be re-run with improved algorithms, the original file is always available without requiring the user to upload again.
+
+**Session Binding (Redis + MongoDB)**: Once the extraction pipeline produces a canonical resume JSON, the Celery worker binds it to the user's active session through the dual-write pattern described in §3.2. The resume JSON, the Qdrant vector identifier, and the original filename are written to both Redis and MongoDB, making the parsed resume immediately available to subsequent chat interactions. This binding is what enables the chatbot's resume-aware tools — CV assessment, job matching, interview preparation — to access the user's parsed profile without re-extraction.
+
+**User Profile (Supabase)**: For authenticated users, the structured profile data — including the canonical resume JSON, quality score, and aggregate metrics (skill count, experience count) — is persisted to Supabase. This write is the bridge between session-scoped and user-scoped persistence: the session may expire, but the user profile endures. The data stored here is the same canonical JSON produced by the extraction pipeline, but associated with the user's identity rather than a transient session identifier.
+
+**Vectorization (Qdrant)**: The extraction pipeline simultaneously generates four dense vector embeddings from different sections of the resume text, each encoding a different aspect of the candidate's profile. These vectors are stored as a single Qdrant point with four named vectors, enabling aspect-specific similarity search — a query against the skills vector returns resumes with similar skill profiles, while a query against the full profile vector returns holistically similar candidates.
+
+The multi-vector architecture is a deliberate design choice that trades storage space (4× the vectors of a single-embedding approach) for retrieval precision. The chatbot's downstream tools exploit this granularity: job matching queries the skills vector for skill-gap analysis, while general resume search uses the full profile vector for holistic comparison. Each vector is accompanied by a metadata payload containing the candidate's structured attributes (seniority level, quality score, skill list), enabling filtered retrieval without secondary database lookups — the vector database serves as both the similarity engine and the metadata store for resume-aware operations.
+
+## 3.5 Tenant Isolation Architecture
+
+The system enforces data isolation at two architectural levels: database-level policies that are evaluated on every query regardless of application logic, and application-level ownership filters that restrict operations to the requesting user's data.
+
+**Database-Level Isolation (Supabase)**: The persistent user profile table enforces Row Level Security (RLS) policies directly in PostgreSQL, ensuring that every SELECT, INSERT, UPDATE, and DELETE operation is automatically filtered to the authenticated user's records. These policies are evaluated by the database engine itself — even a direct SQL query bypassing the application layer cannot access another user's data. The policies extract the authenticated user's identity from the JWT token and compare it against the ownership column on every row access.
+
+The chatbot's backend service requires an exception to this isolation: the Celery worker performs server-side writes on behalf of users during asynchronous CV extraction, a context where no user JWT is available. This is resolved through a trust boundary decision — the worker connects with an elevated service-role key that bypasses RLS, while all user-facing endpoints connect with the user's scoped JWT. This bifurcation ensures that the least-privilege principle is maintained: user-facing code can never exceed the user's own data scope, while background workers operate under explicit, auditable elevated privileges.
+
+**Application-Level Isolation (MongoDB)**: The conversation management layer enforces ownership isolation through query-level filtering — every read, update, and delete operation includes the user's identity as a mandatory filter predicate. This provides defense-in-depth: even if a user somehow obtains another user's conversation identifier, the query filter prevents cross-tenant access. MongoDB does not natively support row-level security policies comparable to PostgreSQL's, making this application-level enforcement the primary isolation mechanism for conversation data.
+
+## 3.6 Design Tradeoffs
+
+### 3.6.1 Four Databases vs. One
+
+The polyglot persistence strategy introduces operational complexity: four databases to deploy, monitor, back up, and maintain, each with its own failure mode and scaling characteristics. The alternative — consolidating into PostgreSQL (which can serve as a cache via `UNLOGGED` tables, a document store via JSONB, and a vector store via pgvector) — would simplify operations at the cost of performance in at least two access patterns. Redis outperforms PostgreSQL for session reads by an order of magnitude, and Qdrant's HNSW index provides sub-100ms approximate nearest-neighbor search at a scale where pgvector's exact search degrades significantly. The system accepts the operational cost because the chatbot's real-time responsiveness depends on each database operating within its designed performance envelope.
+
+### 3.6.2 Dual-Write vs. Event Sourcing
+
+The dual-write pattern (writing to both Redis and MongoDB in the same request path) introduces a consistency risk: if the MongoDB write fails after the Redis write succeeds, the cache contains data that the durable store does not. An event-sourcing architecture — where all state changes are appended to an immutable event log and materialized views are derived from replay — would eliminate this risk but add significant architectural complexity for a system where the failure mode is benign: a missed MongoDB write means the session cannot be restored after Redis eviction, but no data is corrupted. The system accepts this risk because session data is inherently ephemeral and can be regenerated by re-uploading a resume.
+
+### 3.6.3 Embedded Messages vs. Referenced Documents
+
+Conversation messages in the sidebar's persistence layer are embedded as an array within the conversation document rather than stored as individual referenced documents. This trades write amplification (every new message rewrites the parent document's array) for read atomicity (loading a conversation retrieves the complete thread in a single query without joins). For a chatbot where conversations rarely exceed a few hundred messages, the document size remains well within MongoDB's 16 MB limit, and the read performance benefit — a single round-trip instead of a join across two collections — directly impacts the sidebar's perceived responsiveness when switching between conversations.

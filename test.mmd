@@ -1,0 +1,38 @@
+flowchart LR
+    subgraph "Stage 1: Ingestion"
+        direction TB
+        A["Binary file<br>(PDF / DOCX / Image)"] --> B["File validation<br>(type, size ≤ 20MB)"]
+        B --> C["Write to shared volume<br>+ GridFS archival"]
+    end
+
+    subgraph "Stage 2: Text Extraction"
+        direction TB
+        D["PyMuPDF text layer"] --> E{Text empty?}
+        E -->|Yes| F["OCR fallback<br>(Tesseract vie+eng<br>200 DPI rendering)"]
+        E -->|No| G["Raw text"]
+        F --> G
+    end
+
+    subgraph "Stage 4: Validation & Vectorization"
+        direction TB
+        M["CanonicalResume<br>(typed JSON schema)"] --> N["Quality scorer<br>(4 dimensions,<br>0–100 score)"]
+        N --> O["BGE-M3 embedder<br>(4 × 1024-dim<br>named vectors)"]
+        O --> P["Qdrant upsert<br>(vectors + payload)"]
+    end
+
+    subgraph "Stage 3: Semantic Structuring"
+        direction TB
+        H["Heuristic section<br>splitter<br>(11 regex patterns)"] --> I["Semantic chunker<br>(1 chunk per<br>logical unit)"]
+        I --> J["Regex extractor<br>(email, phone, date,<br>GPA, URLs, skills)"]
+        I --> K["PhoBERT NER<br>(PER, ORG, LOC)"]
+        J --> L["Entity merge<br>(regex priority<br>for structured fields)"]
+        K --> L
+    end
+
+    C -->|"Celery async"| D
+    G --> H
+    L --> M
+    P --> Q["Session binding<br>(Redis + MongoDB<br>dual-write)"]
+    
+    C ~~~ M
+    A ~~~ H
