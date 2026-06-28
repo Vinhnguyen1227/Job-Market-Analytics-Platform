@@ -135,4 +135,4 @@ All input data is strictly validated using the **Zod** library (`LoginSchema`, `
 | Profile CRUD tables | 5 (`profiles`, `experiences`, `educations`, `skills`, `user_cvs`) |
 | redisSecurity.ts complexity | 126 lines |
 | middleware.ts complexity | 59 lines |
-| actions.ts complexity | 297 lines (8 Server Actions) |
+| actions.ts complexity | 297 lines (12 Server Actions) |

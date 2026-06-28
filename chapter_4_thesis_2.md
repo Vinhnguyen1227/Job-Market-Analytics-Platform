@@ -16,7 +16,7 @@ To resolve these issues, the system architecture adopts the Command Query Respon
 To optimize Elasticsearch for both relevance scoring and exact filtering, the index structure (`jobs`) is meticulously designed within the data synchronization configuration file.
 
 Two main data type strategies are used:
-1. **Keyword Mapping**: Applied to fields that require exact match filtering and aggregations, such as `url`, `cities` (63 geographic entities), `categories` (66 industry domains), `workTypes`, `levels`, `expBuckets` (4 tiers), and `salaryBuckets` (6 ranges). The `keyword` type allows Elasticsearch to build optimal data structures (inverted index on exact terms) for directly searching original text structures without tokenization.
+1. **Keyword Mapping**: Applied to fields that require exact match filtering and aggregations, such as `url`, `cities` (65 geographic entities), `categories` (66 industry domains), `workTypes`, `levels`, `expBuckets` (4 tiers), and `salaryBuckets` (6 ranges). The `keyword` type allows Elasticsearch to build optimal data structures (inverted index on exact terms) for directly searching original text structures without tokenization.
 2. **Text Mapping**: Applied to fields that require relevance scoring, such as `tieu_de` (job title) and `cong_ty` (company name), using the default `standard` analyzer. The standard analyzer performs Unicode-aware tokenization, lowercasing, and stop word removal, enabling BM25-based relevance ranking.
 
 **Optimizing the "Document Store" with `enabled: false`**:
@@ -49,9 +49,9 @@ flowchart TD
 
 ## 4.4 Vietnamese NLP & Heuristic Normalization Logic
 
-Due to the unstructured nature of Vietnamese job postings, an internal library (`helpers.ts`, 152 lines) was built to extract and normalize data through Heuristic and Regex techniques prior to indexing:
+Due to the unstructured nature of Vietnamese job postings, an internal library (`helpers.ts`, 152 lines) was built to extract and normalize data through Heuristic and Regex techniques prior to indexing. These exact same parsing heuristics are shared with the client-side frontend routing layer (as detailed in Chapter 6, Section 6.4) to ensure that browser-evaluated filter state matches the backend index representations precisely:
 
-- **Location Parsing (`splitLocations`)**: Raw location strings (e.g., "Nơi làm việc: Hà Nội, Tp. HCM") are stripped of unnecessary prefixes, split by commas, and matched against a static array of **63 provinces/cities** (`CITY_PATTERNS`). The system applies Regex for noise filtering when job title keywords (such as "chuyên viên", "trưởng phòng") are mistakenly identified as locations. Notably, the parser implements a **negative lookbehind regex** `(?<!Bà Rịa) - (?!Vũng Tàu)` to prevent incorrectly splitting the compound province name "Bà Rịa - Vũng Tàu" on the hyphen delimiter — a critical edge case in Vietnamese geographic parsing.
+- **Location Parsing (`splitLocations`)**: Raw location strings (e.g., "Nơi làm việc: Hà Nội, Tp. HCM") are stripped of unnecessary prefixes, split by commas, and matched against a static array of **65 geographic entities** (`CITY_PATTERNS`). The system applies Regex for noise filtering when job title keywords (such as "chuyên viên", "trưởng phòng") are mistakenly identified as locations. Notably, the parser implements a **negative lookbehind regex** `(?<!Bà Rịa) - (?!Vũng Tàu)` to prevent incorrectly splitting the compound province name "Bà Rịa - Vũng Tàu" on the hyphen delimiter — a critical edge case in Vietnamese geographic parsing. Additionally, the `CITY_PATTERNS` array explicitly includes both "Vũng Tàu" and "Bà Rịa - Vũng Tàu" to ensure maximum flexibility: search queries containing only "Vũng Tàu" resolve correctly to the city's listings, while provincial queries map to "Bà Rịa - Vũng Tàu".
 
 - **Salary Bucketing (`getSalaryBuckets`)**: Foreign currency salaries are filtered out using a comprehensive regex matching **17 international currency codes** (USD, EUR, GBP, JPY, SGD, AUD, CAD, HKD, KRW, THB, MYR, INR, CNY, RMB, TWD, CZK, CHF). For VND salaries, the system uses Regex to extract number ranges (e.g., "10 - 15 triệu"), removes commas, converts them to floating-point decimals representing millions of VND, and classifies them into 6 fixed income ranges: 0–3, 3–5, 5–10, 10–20, 20–50, and over 50 million VND.
 
@@ -105,7 +105,7 @@ flowchart TD
 To build a UI filtering experience or to provide a valid set of parameters for the AI Chatbot's Tool Calling process, the system needs to know the available filter values (e.g., which cities currently have job postings).
 
 - **Elasticsearch Aggregations**: The client sends queries with a size of 0 (`size: 0`) requesting `terms aggregations` to group distinct attributes (`distinct_cities` up to 1,000 buckets, `distinct_categories` up to 500 buckets).
-- **EnumCache Pattern**: To avoid constantly sending Aggregation queries that consume Elasticsearch resources, the `EnumCache` class (`enum_cache.py`, 138 lines) maintains these lists directly in the server's memory (RAM) with a Time-To-Live (TTL) of 3,600 seconds (1 hour).
+- **EnumCache Pattern**: To avoid constantly sending Aggregation queries that consume Elasticsearch resources, the `EnumCache` class (`enum_cache.py`, 115 lines) maintains these lists directly in the server's memory (RAM) with a Time-To-Live (TTL) of 3,600 seconds (1 hour).
 - **Async Background Refresh**: The cache refresh process runs as a background task via `asyncio.Task` (`_refresh_loop`). Therefore, any GET request from the frontend or Pydantic Validator from the Chatbot can retrieve these data tags in sub-millisecond times thanks to synchronous properties (`@property`), significantly improving the application's overall response speed.
 
 ## 4.7 Key Quantitative Metrics
@@ -115,7 +115,7 @@ To build a UI filtering experience or to provide a valid set of parameters for t
 | ES Docker image version | `elasticsearch:8.13.0` |
 | JVM heap allocation | 512 MB initial / 512 MB maximum |
 | Sync batch size | 500 records per Supabase fetch |
-| City patterns dictionary | 63 geographic entities |
+| City patterns dictionary | 65 geographic entities |
 | Industry domain categories | 66 standardized tags |
 | Salary buckets | 6 ranges (VND millions) |
 | Experience buckets | 4 ranges |
@@ -127,4 +127,4 @@ To build a UI filtering experience or to provide a valid set of parameters for t
 | Max aggregation buckets (cities) | 1,000 |
 | Max aggregation buckets (categories) | 500 |
 | helpers.ts complexity | 152 lines |
-| enum_cache.py complexity | 138 lines |
+| enum_cache.py complexity | 115 lines |

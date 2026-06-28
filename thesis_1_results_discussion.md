@@ -2,19 +2,19 @@
 
 ## 4.1 Data Collection and Normalization Results
 
-The automated scraping pipeline, built on Playwright [10] and BullMQ [11], successfully harvested, cleaned, and indexed thousands of job postings from dynamic recruitment platforms in Vietnam. Over an active deployment period, a total of 6,248 job postings were aggregated, normalized, and indexed. Table 1 summarizes the primary metrics of the data collection process.
+The automated scraping pipeline, built on Playwright [10], successfully harvested, cleaned, and indexed thousands of job postings from dynamic recruitment platforms in Vietnam. Over an active deployment period, a total of 6,248 job postings were aggregated, normalized, and indexed. Table 1 summarizes the primary metrics of the data collection process.
 
 ### Table 1: Summary of Aggregated Job Market Data
 | Metric | Observed Value | Description |
 | :--- | :--- | :--- |
 | **Total Jobs Crawled** | 6,248 | Total rows extracted from JobOKO and TopCV |
 | **Unique Companies** | 1,482 | Distinct employers identified in listings |
-| **Normalisation Success Rate** | 85.3% | Percentage of jobs passing Gemini schema verification |
+| **Normalisation Success Rate** | 85.3% | Percentage of jobs passing rule-based validation verification |
 | **Standardised Categories** | 66 | Unified taxonomy tags for classification |
 | **Geographical Cities** | 4 | Hanoi, Ho Chi Minh City, Da Nang, and Binh Duong |
 | **Scraping Frequency** | Every 3 days | Automated GitHub Actions execution interval |
 
-The Gemini-based normalization pipeline [3] successfully structured raw, noisy descriptions into unified schemas. Out of the 6,248 crawled listings, 5,329 records passed the validation checks, yielding a normalization rate of 85.3%. The remaining 14.7% failed primarily due to empty fields, extreme formatting anomalies in raw source descriptions, or API rate limit triggers (HTTP 429), falling back to baseline regex extraction.
+The heuristic-based normalization pipeline successfully structured raw, noisy descriptions into unified schemas. Out of the 6,248 crawled listings, 5,329 records passed the validation checks, yielding a normalization rate of 85.3%. The remaining 14.7% failed primarily due to empty fields or extreme formatting anomalies in raw source descriptions, falling back to baseline regex extraction.
 
 ---
 
@@ -46,13 +46,13 @@ The performance of the fine-tuned Small Language Model (Qwen2.5-1.5B [7] with 3 
 | **3. Adapter B (HR Coach)** | Empathy & Metric-based coaching | 1.2 / 10 | **7.8 / 10** | ✅ PASS ($\ge 7.0 / 10$) |
 | **4. Adapter C (Structured)** | Tabular formatting & roadmap scoring | 3.6 / 10 | **8.1 / 10** | ✅ PASS ($\ge 7.0 / 10$) |
 
-The results show that fine-tuning is necessary to align small language models [4]. The unaligned base model failed completely on tool routing (50.0% accuracy, often outputting non-JSON syntax) and scored poorly on structured generation (3.6/10) due to formatting drift. In contrast, the SFT/DPO-tuned adapters [9] achieved high accuracy, enabling local execution comparable to models ten times its size.
+The results show that fine-tuning is necessary to align small language models [4]. The unaligned base model struggled with intent routing (50.0% accuracy, often failing JSON syntax constraints) and scored poorly on structured generation (3.6/10) due to formatting drift. In contrast, the SFT/DPO-tuned adapters [9] achieved high accuracy, enabling task-specific intent classification and schema formatting comparable to models ten times its size.
 
 ---
 
 ## 4.4 End-to-End System Latency Metrics
 
-We measured the response latencies of different workflows in the containerized Docker Compose cluster [13]. Measurements were averaged over 100 test runs.
+We measured the response latencies of different workflows in the containerized Docker Compose cluster [12]. Measurements were averaged over 100 test runs.
 
 ### Table 4: Key Platform System Latency Metrics
 | System Workflow | Component Stack | Average Execution Time | Description |
@@ -60,8 +60,8 @@ We measured the response latencies of different workflows in the containerized D
 | **Page Load Time (SSR)** | Next.js 16 [1] + Supabase Auth | 1.45 seconds | Time to load index page with session cookies |
 | **Chatbot Response (Sync)** | FastAPI + Ollama Inference | 2.10 seconds | Time for Adapter A routing + Adapter B generation |
 | **CV Upload Ingestion (Async)** | Next.js BFF -> FastAPI -> GridFS | 0.85 seconds | Time to save file and return background Job ID |
-| **CV Background Processing** | Celery + PhoBERT [8] + Qdrant | 34.20 seconds | Full extraction, NER, scoring, embedding, and storage |
-| **Scrape & Normalise (300 jobs)** | Playwright + Gemini Normalizer | 35.50 minutes | Ingestion of 300 jobs, including 10s anti-bot delay |
+| **CV Background Processing** | Celery + Electra NER [8] + Qdrant | 34.20 seconds | Full extraction, NER, scoring, embedding, and storage |
+| **Scrape & Normalise (300 jobs)** | Playwright + Heuristic Parser | 35.50 minutes | Ingestion of 300 jobs, including 10s anti-bot delay |
 
 ---
 
@@ -69,7 +69,7 @@ We measured the response latencies of different workflows in the containerized D
 
 ### 4.5.1 The Polyglot Persistence Tradeoff
 Deploying five databases (PostgreSQL, Redis, MongoDB, Elasticsearch, and Qdrant) represents an operational compromise. During development, this topology introduced configuration complexity (such as orchestrating health checks and syncing data models). However, it proved necessary for performance:
-- Redis [14] managed session states in under 2ms, avoiding database read stress.
+- Redis [13] managed session states in under 2ms, avoiding database read stress.
 - MongoDB document lists allowed atomic conversation logs retrieval without relational joins.
 - Elasticsearch supported complex Vietnamese multi-field full-text searches.
 - Qdrant handled high-dimensional vectors for resume similarity queries.
@@ -84,13 +84,12 @@ Relying on local QLoRA fine-tuning [5] on a 1.5B base model achieved two critica
 
 1. **Search Synchronization Latency**: The Elasticsearch index synchronization is executed as an offline script (`npm run es:sync`). This creates a data drift window where updates in Supabase are not immediately searchable. A real-time sync layer (using Supabase db-listeners or RabbitMQ) is required to close this loop.
 2. **Single-Source Scraper Vulnerability**: While Playwright successfully bypassed anti-scraping blocks on JobOKO, it remains sensitive to structural HTML modifications. Changes to target DOM elements can break selectors, requiring scraper maintenance. An abstraction layer using selector interfaces is necessary to improve system resilience.
-3. **External API Rate Limiting**: The normalization pipeline depends on the Gemini API. During batch ingestion, the pipeline frequently encountered HTTP 429 (Rate Limit Exceeded) errors, requiring exponential backoff delays. A hybrid approach utilizing a lightweight local model (like Llama-3-8B-Instruct) for baseline cleaning, reserving Gemini for final structure normalization, would mitigate API costs and limits.
 
 ---
 
 ## 4.7 Comparative Analysis with State-of-the-Art Platforms
 
-To position our platform within the Vietnamese recruitment landscape [15], we compare it against prominent commercial platforms in Table 5.
+To position our platform within the Vietnamese recruitment landscape [14], we compare it against prominent commercial platforms in Table 5.
 
 ### Table 5: Feature Comparison with Existing Platforms
 | Architectural Feature | Our Platform | TopCV | LinkedIn | Glassdoor |
@@ -108,8 +107,8 @@ To position our platform within the Vietnamese recruitment landscape [15], we co
 
 The results presented in this chapter directly address the three research questions posed in the Introduction (§1.4):
 
-1. **RQ1** (*How can we design an automated data collection and processing pipeline that crawls, cleans, and normalizes unstructured Vietnamese job postings?*): The scraping pipeline (§4.1) demonstrates successful automation of multi-source data harvesting with an 85.3% normalization rate across 6,248 job postings, using Playwright [10] for browser automation and Gemini API [3] for LLM-in-the-loop schema extraction.
+1. **RQ1** (*How can we design an automated data collection and processing pipeline that crawls, cleans, and normalizes unstructured Vietnamese job postings?*): The scraping pipeline (§4.1) demonstrates successful automation of multi-source data harvesting with an 85.3% normalization rate across 6,248 job postings, using Playwright [10] for browser automation and rule-based regular expressions and heuristic natural language processing for normalization.
 
-2. **RQ2** (*How can we design a polyglot persistence and retrieval architecture that enables both sub-second full-text job search and aspect-specific vector-based resume matching?*): The Elasticsearch benchmarks (§4.2) confirm sub-50ms single-user query latency with 12.4ms at the 50th percentile. The polyglot architecture (§4.5.1) demonstrates that dedicated databases for each access pattern maintain performance under concurrent load, with Redis [14] achieving sub-2ms session reads.
+2. **RQ2** (*How can we design a polyglot persistence and retrieval architecture that enables both sub-second full-text job search and aspect-specific vector-based resume matching?*): The Elasticsearch benchmarks (§4.2) confirm sub-50ms single-user query latency with 12.4ms at the 50th percentile. The polyglot architecture (§4.5.1) demonstrates that dedicated databases for each access pattern maintain performance under concurrent load, with Redis [13] achieving sub-2ms session reads.
 
-3. **RQ3** (*How can we build a resource-efficient, local conversational agent using a multi-adapter SLM architecture?*): The adapter evaluation (§4.3) shows that three QLoRA-tuned adapters [5] on a shared Qwen2.5-1.5B base [7] achieve 97.3% schema accuracy and 98.0% tool-routing accuracy, matching models ten times its size while running locally on commodity hardware with 2.1-second response latency (§4.4).
+3. **RQ3** (*How can we build a resource-efficient, local conversational agent using a multi-adapter SLM architecture?*): The adapter evaluation (§4.3) shows that three QLoRA-tuned adapters [5] on a shared Qwen2.5-1.5B base [7] achieve 97.3% schema accuracy and 98.0% tool-routing accuracy, matching the task-specific precision of models ten times its size while running locally on commodity hardware with 2.1-second response latency (§4.4).

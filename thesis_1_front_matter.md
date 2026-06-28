@@ -53,12 +53,9 @@ Finally, I would like to thank my family and friends for their unwavering moral 
 | :--- | :--- |
 | **API** | Application Programming Interface |
 | **BFF** | Backend-For-Frontend |
-| **BullMQ** | Bull Message Queue |
-| **CI/CD** | Continuous Integration / Continuous Deployment |
 | **CV** | Curriculum Vitae |
 | **DPO** | Direct Preference Optimization |
 | **ES** | Elasticsearch |
-| **GHA** | GitHub Actions |
 | **HNSW** | Hierarchical Navigable Small World |
 | **JWT** | JSON Web Token |
 | **KIE** | Key Information Extraction |
@@ -76,7 +73,6 @@ Finally, I would like to thank my family and friends for their unwavering moral 
 | **SOTA** | State Of The Art |
 | **SSR** | Server-Side Rendering |
 | **TTL** | Time-To-Live |
-| **USTH** | University of Science and Technology of Hanoi |
 
 ---
 
@@ -92,21 +88,20 @@ Finally, I would like to thank my family and friends for their unwavering moral 
 
 ## LIST OF FIGURES
 
-- **Figure 1**: Three-domain AI subsystem architecture (§3.1)
-- **Figure 2**: Container topology of the Docker Compose services (§3.1)
-- **Figure 3**: Zero-copy file exchange sequence diagram (§3.1)
-- **Figure 4**: Chat request pipeline flowchart (§3.1)
-- **Figure 5**: End-to-end CV upload pipeline flowchart (§3.1)
-- **Figure 6**: Session lifecycle state diagram (§3.2)
-- **Figure 7**: Three-tier session read fallback chain (§3.2)
-- **Figure 8**: Conversation state machine flowchart (§3.2)
-- **Figure 9**: Resume cross-database data pipeline (§3.2)
-- **Figure 10**: Server-client rendering trust boundary (§3.3)
-- **Figure 11**: Asynchronous task coordination sequence diagram (§3.3)
-- **Figure 12**: Response presentation router (§3.3)
-- **Figure 13**: Multi-adapter orchestrator architecture (§3.4)
-- **Figure 14**: Intent classification resilience cascade (§3.4)
-- **Figure 15**: Tool dispatch strategy pattern (§3.4)
-- **Figure 16**: Seven-phase training pipeline overview (§3.5)
-- **Figure 17**: Data structuring extraction cascade (§3.5)
-- **Figure 18**: Three-layer stacked DPO adapter weights diagram (§3.5)
+- **Figure 1**: Three-domain AI subsystem architecture
+- **Figure 2**: Container topology of the Docker Compose services
+- **Figure 3**: Zero-copy file exchange sequence diagram
+- **Figure 4**: Chat request pipeline flowchart
+- **Figure 5**: End-to-end CV upload pipeline flowchart
+- **Figure 6**: Session lifecycle state diagram
+- **Figure 7**: Three-tier session read fallback chain
+- **Figure 8**: Conversation state machine flowchart
+- **Figure 9**: Resume cross-database data pipeline
+- **Figure 10**: Server-client rendering trust boundary
+- **Figure 11**: Asynchronous task coordination sequence diagram
+- **Figure 12**: Response presentation router
+- **Figure 13**: Multi-adapter orchestrator architecture
+- **Figure 14**: Intent classification resilience cascade
+- **Figure 15**: Tool dispatch strategy pattern
+
+

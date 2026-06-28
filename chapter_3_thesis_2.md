@@ -174,7 +174,7 @@ Elasticsearch indices are carefully mapped to support diverse search requirement
 | `url` | `keyword` | — | Unique document ID |
 | `tieu_de` | `text` | `standard` | Job title full-text search (boosted ×3) |
 | `cong_ty` | `text` | `standard` | Company name search (boosted ×2) |
-| `cities` | `keyword` | — | Location faceted filter (63 provinces/cities) |
+| `cities` | `keyword` | — | Location faceted filter (65 geographic entities) |
 | `categories` | `keyword` | — | Industry domain faceted filter (66 domains) |
 | `workTypes` | `keyword` | — | Work type faceted filter |
 | `levels` | `keyword` | — | Seniority level faceted filter |
@@ -213,7 +213,7 @@ Elasticsearch was selected for its mature ecosystem, native Docker support, powe
 | ES index fields | 10 mapped fields + 1 stored-only (`raw_data`) |
 | ES sync batch size | 500 records per Supabase fetch |
 | ES JVM heap allocation | 512 MB initial / 512 MB maximum |
-| Geographic entities (cities) | 63 entries (61 provinces + "Toàn quốc" + "Nước ngoài") |
+| Geographic entities (cities) | 65 entries (63 provinces/regions + "Toàn quốc" + "Nước ngoài") |
 | Industry domain categories | 66 standardized categories |
 | Salary buckets | 6 ranges (0–3, 3–5, 5–10, 10–20, 20–50, 50+ triệu VND) |
 | Experience buckets | 4 ranges (< 1, 1–2, 2–5, 5+ years) |

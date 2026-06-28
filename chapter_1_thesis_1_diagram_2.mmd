@@ -1,0 +1,32 @@
+graph TB
+    subgraph "Docker Compose Network"
+        subgraph "Web Tier"
+            NEXT["next-app<br>Next.js 16"]
+        end
+
+        subgraph "AI Tier"
+            API["chatbot-api<br>FastAPI / Uvicorn"]
+            CELERY["celery-worker<br>Celery (ml queue)"]
+        end
+
+        subgraph "Data Tier"
+            REDIS["redis"]
+            MONGO["mongodb"]
+            ES["elasticsearch"]
+            QDRANT["qdrant"]
+        end
+    end
+
+    HOST["Ollama (Host)<br>GPU-accelerated"]
+
+    NEXT -->|"BFF proxy"| API
+    API -->|"Task dispatch"| REDIS
+    CELERY -->|"Task consume"| REDIS
+    API -->|"Session R/W"| REDIS
+    API -->|"History R/W"| MONGO
+    CELERY -->|"History R/W"| MONGO
+    API -->|"Job search"| ES
+    API -->|"Resume vectors"| QDRANT
+    CELERY -->|"Embed + store"| QDRANT
+    API -.->|"host-gateway bridge"| HOST
+    CELERY -.->|"host-gateway bridge"| HOST

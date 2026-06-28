@@ -20,7 +20,7 @@ Job-Market-Analytics-Platform/
 ├── backend/                    # Core platform logic
 │   ├── auth/                   # Supabase authentication server actions
 │   ├── elasticsearch/          # ES synchronization script (sync.ts, helpers.ts)
-│   ├── jobs/                   # Playwright BullMQ worker, cron scheduler
+│   ├── jobs/                   # Playwright worker, cron scheduler
 │   ├── lib/                    # Redis clients and security middleware
 │   ├── scrap/                  # Playwright scraper engines (scrap_topcv.ts)
 │   └── chatbot/                # FastAPI multi-adapter chatbot orchestrator

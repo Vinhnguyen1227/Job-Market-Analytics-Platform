@@ -5,8 +5,8 @@
 This thesis presented the design, implementation, and evaluation of the **Intelligent Job Market Aggregation and Analytics Platform**, a comprehensive solution addressing the fragmentation and unstructured nature of the Vietnamese employment landscape. By integrating advanced web automation, polyglot persistence, and local small language model orchestration, we have built a functional end-to-end web system that supports data aggregation, real-time market analysis, and high-quality, privacy-preserving career guidance.
 
 The project achieved several primary technical milestones:
-1. **Automated Data Harvesting**: Established a robust crawling architecture using Playwright and BullMQ, successfully scraping, deduplicating, and archiving 6,248 job listings from major Vietnamese job search platforms.
-2. **Hybrid ML Normalisation**: Created a reliable four-phase data pipeline leveraging Google Gemini API and rule-based fallback handlers to structure noisy job ads with an 85.3% schema validation rate.
+1. **Automated Data Harvesting**: Established a robust crawling architecture using Playwright, successfully scraping, deduplicating, and archiving 6,248 job listings from major Vietnamese job search platforms.
+2. **Heuristic Data Normalisation**: Created a reliable data pipeline leveraging rule-based regular expressions and heuristic parsing libraries to clean and structure noisy job ads with an 85.3% validation rate.
 3. **Sub-second Information Retrieval**: Optimized a single-node Elasticsearch cluster to achieve a 50th percentile query latency of 12.4ms, providing responsive faceted filtering for end-users.
 4. **Multi-Adapter SLM Architecture**: Fine-tuned Qwen2.5-1.5B [7] with task-specific QLoRA [5] and DPO [9] weights, creating a local multi-adapter chatbot that runs on consumer-grade hardware. The model achieved 97.3% schema accuracy and 98.0% tool-routing accuracy, matching the capabilities of larger commercial models.
 5. **Polyglot Persistence Layer**: Structured a four-database topology (Supabase PostgreSQL, Redis cache, MongoDB document store, and Qdrant vector database) that balances read/write performance, transactional integrity, and semantic retrieval speed.
@@ -16,7 +16,7 @@ From an academic perspective, this work demonstrates the viability of deploying 
 
 ---
 
-## 5.2 Perspective (Future Work)
+## 5.2 Perspective
 
 While the platform is fully operational, several paths remain for future enhancement and academic research:
 

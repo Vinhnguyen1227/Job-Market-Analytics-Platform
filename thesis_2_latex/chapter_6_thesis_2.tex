@@ -5,32 +5,16 @@ The core frontend of the CareerIntel platform is constructed using the Next.js 1
 
 \subsection{Technology Choice: Next.js App Router vs Alternatives}
 
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|p{0.15\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.15\textwidth}|}
-        \hline
-        \textbf{Criteria} & \textbf{Next.js App Router} & \textbf{Next.js Pages Router} & \textbf{React + Vite (SPA)} & \textbf{Nuxt.js (Vue)} \\
-        \hline
-        \textbf{Rendering model} & Hybrid SSR + Client & SSR via \texttt{getServerSideProps} & Client-only (CSR) & Hybrid SSR + Client \\
-        \hline
-        \textbf{Server Components} & Native (React Server Components) & Not supported & Not applicable & Not supported \\
-        \hline
-        \textbf{Auth data fetching} & Server-side cookie access in RSC & \texttt{getServerSideProps} only & Client-side only (flash of unauth content) & \texttt{useAsyncData} in server middleware \\
-        \hline
-        \textbf{Route protection} & \texttt{middleware.ts} edge function & \texttt{\_middleware.ts} (experimental) & Manual route guards & \texttt{definePageMeta} middleware \\
-        \hline
-        \textbf{API layer} & File-based API routes in \texttt{app/api/} & File-based in \texttt{pages/api/} & Separate backend required & \texttt{server/api/} directory \\
-        \hline
-        \textbf{Server Actions} & Native \texttt{'use server'} for forms & Not supported & Not applicable & \texttt{useAsyncData} with API calls \\
-        \hline
-        \textbf{Streaming/Suspense} & Native \texttt{loading.tsx} + Suspense & Manual implementation & Not applicable & \texttt{<Suspense>} support \\
-        \hline
-        \textbf{Bundle splitting} & Automatic per-route & Manual \texttt{dynamic} imports & Manual \texttt{lazy} imports & Automatic per-route \\
-        \hline
-    \end{tabular}
-    \caption{Frontend Architecture Technology Comparison}
-    \label{tab:frontend_comparison}
-\end{table}
+| Criteria | Next.js App Router | Next.js Pages Router | React + Vite (SPA) | Nuxt.js (Vue) |
+|----------|-------------------|---------------------|--------------------|-|
+| \textbf{Rendering model} | Hybrid SSR + Client | SSR via \texttt{getServerSideProps} | Client-only (CSR) | Hybrid SSR + Client |
+| \textbf{Server Components} | Native (React Server Components) | Not supported | Not applicable | Not supported |
+| \textbf{Auth data fetching} | Server-side cookie access in RSC | \texttt{getServerSideProps} only | Client-side only (flash of unauth content) | \texttt{useAsyncData} in server middleware |
+| \textbf{Route protection} | \texttt{middleware.ts} edge function | \texttt{\_middleware.ts} (experimental) | Manual route guards | \texttt{definePageMeta} middleware |
+| \textbf{API layer} | File-based API routes in \texttt{app/api/} | File-based in \texttt{pages/api/} | Separate backend required | \texttt{server/api/} directory |
+| \textbf{Server Actions} | Native \texttt{'use server'} for forms | Not supported | Not applicable | \texttt{useAsyncData} with API calls |
+| \textbf{Streaming/Suspense} | Native \texttt{loading.tsx} + Suspense | Manual implementation | Not applicable | \texttt{<Suspense>} support |
+| \textbf{Bundle splitting} | Automatic per-route | Manual \texttt{dynamic} imports | Manual \texttt{lazy} imports | Automatic per-route |
 
 Next.js App Router was selected for its native Server Components support, which enables secure server-side authentication cookie handling, eliminates the "flash of unauthenticated content" common in SPAs, and provides built-in Server Actions that remove the need for intermediary API routes for form submissions.
 
@@ -43,59 +27,60 @@ This architectural choice allows protected routes, such as the \texttt{/profile}
 \section{Faceted Search Architecture}
 The job search interface, located at \texttt{/search}, provides users with an Elasticsearch-powered faceted search experience. Managing the complex state of numerous interdependent filters requires a robust state management strategy.
 
-\subsection{URL-Driven State Management}
-Instead of relying on isolated React state (\texttt{useState} or Redux), the search interface anchors its state entirely to the browser's URL query parameters via Next.js's \texttt{useSearchParams()}.
-When a user interacts with the custom \texttt{DropdownFilter} component (e.g., selecting "Ho Chi Minh City" and "Senior Level"), the client component immediately updates the URL. This mutation triggers a shallow route update, prompting a \texttt{useEffect} hook to serialize the parameters and invoke the \texttt{/api/v1/jobs/search} API endpoint.
+\subsection{Hybrid State Management Strategy}
+The search interface implements a hybrid state management model to balance initial deep-linking capability with high-speed, client-side responsiveness.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/chapter_6_thesis_2_diagram_1.pdf}
-    \caption{URL-Driven Search State Flow}
-    \label{fig:chapter_6_diagram_1}
-\end{figure}
+\begin{enumerate}
+\item \textbf{Initial Parameter Hydration}: On component mount, the search page utilizes Next.js's \texttt{useSearchParams()} hook to read initial search criteria (e.g. \texttt{keyword}, \texttt{location}, or \texttt{category}) directly from the browser's URL. This allows deep-linking to search pages (such as user redirection from landing page query boxes).
+\item \textbf{Local React State Control}: For subsequent filtering interactions, the state is managed locally via React's \texttt{useState} hook (\texttt{filters} state). When a user interacts with the custom \texttt{DropdownFilter} components to select locations, levels, or salary ranges, the component updates this React state rather than immediately pushing mutations to the browser's address bar history, avoiding history-stack pollution and route re-evaluations.
+\item \textbf{Reactive Fetching Loop}: A \texttt{useEffect} hook monitors the \texttt{filters} state. When updated, it compiles the selected facets into a query parameter string and dispatches an asynchronous \texttt{fetch} request to the backend search handler \texttt{/api/v1/jobs/search?locations=...}.
+\end{enumerate}
 
-This architecture ensures that complex search queries are entirely linkable, shareable, and resilient to page reloads, maintaining a stateless and predictable data flow.
+\begin{verbatim}
+sequenceDiagram
+    participant User
+    participant FilterUI as DropdownFilter
+    participant PageState as React State (useState)
+    participant ClientHook as useEffect
+    participant ES_API as /api/v1/jobs/search
+    participant ES as Elasticsearch
+    
+    User->>FilterUI: Select "Hà Nội"
+    FilterUI->>PageState: Update filters state (filters.locations = ["Hà Nội"])
+    PageState->>ClientHook: Trigger fetchJobs callback
+    ClientHook->>ES_API: GET /api/v1/jobs/search?locations=Hà Nội
+    ES_API->>ES: bool query (filter: cities=["Hà Nội"])
+    ES-->>ES_API: Matching job documents
+    ES_API-->>PageState: Set job list state (setJobs)
+    PageState-->>FilterUI: Re-render Search Results (React Virtual DOM)
+\end{verbatim}
+
+This hybrid approach allows the interface to maintain linkability upon entry while ensuring subsequent multi-criteria queries are completed instantly within the page scope without browser URL changes.
 
 \subsection{Supported Filter Parameters}
 
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|l|l|l|l|}
-        \hline
-        \textbf{URL Parameter} & \textbf{ES Field} & \textbf{Type} & \textbf{Example} \\
-        \hline
-        \texttt{q} & \texttt{tieu\_de}, \texttt{cong\_ty} & \texttt{multi\_match} (keyword) & \texttt{?q=developer} \\
-        \hline
-        \texttt{locations} & \texttt{cities} & \texttt{terms} filter & \texttt{?locations=Hà Nội} \\
-        \hline
-        \texttt{categories} & \texttt{categories} & \texttt{terms} filter & \texttt{?categories=IT Phần mềm} \\
-        \hline
-        \texttt{levels} & \texttt{levels} & \texttt{terms} filter & \texttt{?levels=Quản lý} \\
-        \hline
-        \texttt{expBuckets} & \texttt{expBuckets} & \texttt{terms} filter & \texttt{?expBuckets=2 – 5 năm} \\
-        \hline
-        \texttt{salaryBuckets} & \texttt{salaryBuckets} & \texttt{terms} filter & \texttt{?salaryBuckets=10 – 20 triệu} \\
-        \hline
-        \texttt{workTypes} & \texttt{workTypes} & \texttt{terms} filter & \texttt{?workTypes=Toàn thời gian} \\
-        \hline
-        \texttt{page} & ES \texttt{from} & Pagination offset & \texttt{?page=2} \\
-        \hline
-    \end{tabular}
-    \caption{Supported Filter Parameters for Faceted Search}
-    \label{tab:search_parameters}
-\end{table}
+| URL Parameter | ES Field | Type | Example |
+|--------------|----------|------|---------|
+| \texttt{q} | \texttt{tieu\_de}, \texttt{cong\_ty} | \texttt{multi\_match} (keyword) | \texttt{?q=developer} |
+| \texttt{locations} | \texttt{cities} | \texttt{terms} filter | \texttt{?locations=Hà Nội} |
+| \texttt{categories} | \texttt{categories} | \texttt{terms} filter | \texttt{?categories=IT Phần mềm} |
+| \texttt{levels} | \texttt{levels} | \texttt{terms} filter | \texttt{?levels=Quản lý} |
+| \texttt{expBuckets} | \texttt{expBuckets} | \texttt{terms} filter | \texttt{?expBuckets=2 – 5 năm} |
+| \texttt{salaryBuckets} | \texttt{salaryBuckets} | \texttt{terms} filter | \texttt{?salaryBuckets=10 – 20 triệu} |
+| \texttt{workTypes} | \texttt{workTypes} | \texttt{terms} filter | \texttt{?workTypes=Toàn thời gian} |
+| \texttt{page} | ES \texttt{from} | Pagination offset | \texttt{?page=2} |
 
 \section{Client-Side Vietnamese NLP Processing}
-While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
+While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. As detailed in Chapter 4, Section 4.4, these client-side parsers share the exact same heuristic and regex structures as the backend synchronization library helpers.ts to ensure consistency between the indexed facets and browser-evaluated filter state. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
 
 \subsection{Location and Geographic Parsing (\texttt{splitLocations})}
-Job postings on Vietnamese platforms frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a \texttt{splitLocations} parser utilizing a predefined dictionary of \textbf{63 valid geographic entities} (61 Vietnamese provinces/cities plus "Toàn quốc" and "Nước ngoài") and localized regex patterns.
+Job postings on Vietnamese portals frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a \texttt{splitLocations} parser utilizing a predefined dictionary of \textbf{65 valid geographic entities} (63 Vietnamese provinces/regions plus "Toàn quốc" and "Nước ngoài") and localized regex patterns.
 
 The parser performs the following operations:
 \begin{enumerate}
-    \item \textbf{Prefix stripping}: Removes common Vietnamese location prefixes ("Nơi làm việc:", "Khu vực:", "Tại:").
-    \item \textbf{Intelligent delimiter splitting}: Splits on commas and semicolons. For hyphens, a \textbf{negative lookbehind regex} \texttt{(?<!Bà Rịa) - (?!Vũng Tàu)} is employed to prevent incorrectly splitting the compound province "Bà Rịa - Vũng Tàu" — a critical Vietnamese geographic edge case where the dash is part of the official name.
-    \item \textbf{Dictionary matching}: Each fragment is matched against \texttt{CITY\_PATTERNS}. The \texttt{normalizeLocation} function additionally filters out false positives by rejecting fragments that match job title keywords (e.g., "chuyên viên", "trưởng phòng", "giám đốc") using a Vietnamese occupational regex filter.
+\item \textbf{Prefix stripping}: Removes common Vietnamese location prefixes ("Nơi làm việc:", "Khu vực:", "Tại:").
+\item \textbf{Intelligent delimiter splitting}: Splits on commas and semicolons. For hyphens, a \textbf{negative lookbehind regex} \texttt{(?<!Bà Rịa) - (?!Vũng Tàu)} is employed to prevent incorrectly splitting the compound province "Bà Rịa - Vũng Tàu" — a critical Vietnamese geographic edge case where the dash is part of the official name.
+\item \textbf{Dictionary matching}: Each fragment is matched against \texttt{CITY\_PATTERNS}. The \texttt{normalizeLocation} function additionally filters out false positives by rejecting fragments that match job title keywords (e.g., "chuyên viên", "trưởng phòng", "giám đốc") using a Vietnamese occupational regex filter.
 \end{enumerate}
 
 \subsection{Unstructured Salary Categorization (\texttt{getSalaryBuckets})}
@@ -106,70 +91,37 @@ The parser first filters out \textbf{17 foreign currency codes} (USD, EUR, GBP, 
 \subsection{Experience Tier Mapping (\texttt{getExpBuckets})}
 The \texttt{getExpBuckets} parser processes strings like "Dưới 1 năm", "trên 5 năm", or "2-5 tháng". It handles four Vietnamese expression patterns:
 \begin{enumerate}
-    \item \textbf{"dưới" (under)}: e.g., "dưới 1 năm" $\rightarrow$ range [0, 0.99]
-    \item \textbf{"trên/hơn/ít nhất" (over/more than/at least)}: e.g., "trên 5 năm" $\rightarrow$ range [5.01, $\infty$]
-    \item \textbf{Range expressions}: e.g., "1 - 2 năm" $\rightarrow$ range [1, 2]
-    \item \textbf{Single values}: e.g., "3 năm" $\rightarrow$ range [3, 3]
+\item \textbf{"dưới" (under)}: e.g., "dưới 1 năm" → range [0, 0.99]
+\item \textbf{"trên/hơn/ít nhất" (over/more than/at least)}: e.g., "trên 5 năm" → range [5.01, ∞]
+\item \textbf{Range expressions}: e.g., "1 - 2 năm" → range [1, 2]
+\item \textbf{Single values}: e.g., "3 năm" → range [3, 3]
 \end{enumerate}
 
 It converts all parsed numeric values into a standardized yearly metric (dividing month-based values by 12) and determines intersection overlaps with 4 predefined experience tiers ("Dưới 1 năm", "1 – 2 năm", "2 – 5 năm", "Trên 5 năm"). By executing these deterministic parsers directly in the browser's JavaScript engine, the frontend remains highly responsive while ensuring data conforms strictly to the schema expected by the Elasticsearch backend.
 
 \section{Page Architecture}
 
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|l|c|p{0.5\textwidth}|}
-        \hline
-        \textbf{Route} & \textbf{Server/Client} & \textbf{Key Features} \\
-        \hline
-        \texttt{/} (Home) & Server + Client & Hero section, search bar with dropdown filters, feature cards \\
-        \hline
-        \texttt{/search} & Client & ES-powered faceted search with 7 filters, pagination, URL-driven state \\
-        \hline
-        \texttt{/profile} & Server + Client & Profile CRUD (experience, education, skills, CV upload via Supabase Storage) \\
-        \hline
-        \texttt{/insights} & Server + Client & Market analytics dashboard \\
-        \hline
-        \texttt{/login} & Client & Login form with Zod validation, Server Action submission \\
-        \hline
-        \texttt{/signup} & Client & Registration form with email confirmation flow \\
-        \hline
-        \texttt{/job/[id]} & Server & Individual job detail page (dynamic route) \\
-        \hline
-    \end{tabular}
-    \caption{Next.js Application Page Architecture}
-    \label{tab:page_architecture}
-\end{table}
+| Route | Server/Client | Key Features |
+|-------|:---:|---------|
+| \texttt{/} (Home) | Server + Client | Hero section, search bar with dropdown filters, feature cards |
+| \texttt{/search} | Client | ES-powered faceted search with 7 filters, pagination, URL-driven state |
+| \texttt{/profile} | Server + Client | Profile CRUD (experience, education, skills, CV upload via Supabase Storage) |
+| \texttt{/insights} | Server + Client | Market analytics dashboard |
+| \texttt{/login} | Client | Login form with Zod validation, Server Action submission |
+| \texttt{/signup} | Client | Registration form with email confirmation flow |
+| \texttt{/job/[id]} | Server | Individual job detail page (dynamic route) |
 
 \section{Key Quantitative Metrics}
 
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|l|l|}
-        \hline
-        \textbf{Metric} & \textbf{Value} \\
-        \hline
-        Total page routes & 7 distinct pages \\
-        \hline
-        API routes & 9 route handlers \\
-        \hline
-        Geographic entities in dictionary & 63 (61 provinces + 2 meta-regions) \\
-        \hline
-        Foreign currency codes filtered & 17 \\
-        \hline
-        Salary buckets & 6 ranges \\
-        \hline
-        Experience buckets & 4 ranges \\
-        \hline
-        Work type categories & 5 standard tags \\
-        \hline
-        Vietnamese expression patterns (exp) & 4 distinct regex patterns \\
-        \hline
-        Shared components & 2 (\texttt{Navbar.tsx}, \texttt{RequireLogin.tsx}) \\
-        \hline
-        helpers.ts shared parser & 152 lines \\
-        \hline
-    \end{tabular}
-    \caption{Frontend Architecture Quantitative Metrics}
-    \label{tab:chapter_6_metrics}
-\end{table}
+| Metric | Value |
+|--------|-------|
+| Total page routes | 7 distinct pages |
+| API routes | 9 route handlers |
+| Geographic entities in dictionary | 65 (63 provinces/regions + "Toàn quốc" + "Nước ngoài") |
+| Foreign currency codes filtered | 17 |
+| Salary buckets | 6 ranges |
+| Experience buckets | 4 ranges |
+| Work type categories | 5 standard tags |
+| Vietnamese expression patterns (exp) | 4 distinct regex patterns |
+| Shared components | 2 (\texttt{Navbar.tsx}, \texttt{RequireLogin.tsx}) |
+| helpers.ts shared parser | 152 lines |

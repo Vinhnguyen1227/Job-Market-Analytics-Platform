@@ -53,12 +53,9 @@ Finally, I would like to thank my family and friends for their unwavering moral 
 | :--- | :--- |
 | **API** | Application Programming Interface |
 | **BFF** | Backend-For-Frontend |
-| **BullMQ** | Bull Message Queue |
-| **CI/CD** | Continuous Integration / Continuous Deployment |
 | **CV** | Curriculum Vitae |
 | **DPO** | Direct Preference Optimization |
 | **ES** | Elasticsearch |
-| **GHA** | GitHub Actions |
 | **HNSW** | Hierarchical Navigable Small World |
 | **JWT** | JSON Web Token |
 | **KIE** | Key Information Extraction |
@@ -76,7 +73,6 @@ Finally, I would like to thank my family and friends for their unwavering moral 
 | **SOTA** | State Of The Art |
 | **SSR** | Server-Side Rendering |
 | **TTL** | Time-To-Live |
-| **USTH** | University of Science and Technology of Hanoi |
 
 ---
 
@@ -92,29 +88,28 @@ Finally, I would like to thank my family and friends for their unwavering moral 
 
 ## LIST OF FIGURES
 
-- **Figure 1**: Three-domain AI subsystem architecture (§3.1)
-- **Figure 2**: Container topology of the Docker Compose services (§3.1)
-- **Figure 3**: Zero-copy file exchange sequence diagram (§3.1)
-- **Figure 4**: Chat request pipeline flowchart (§3.1)
-- **Figure 5**: End-to-end CV upload pipeline flowchart (§3.1)
-- **Figure 6**: Session lifecycle state diagram (§3.2)
-- **Figure 7**: Three-tier session read fallback chain (§3.2)
-- **Figure 8**: Conversation state machine flowchart (§3.2)
-- **Figure 9**: Resume cross-database data pipeline (§3.2)
-- **Figure 10**: Server-client rendering trust boundary (§3.3)
-- **Figure 11**: Asynchronous task coordination sequence diagram (§3.3)
-- **Figure 12**: Response presentation router (§3.3)
-- **Figure 13**: Multi-adapter orchestrator architecture (§3.4)
-- **Figure 14**: Intent classification resilience cascade (§3.4)
-- **Figure 15**: Tool dispatch strategy pattern (§3.4)
-- **Figure 16**: Seven-phase training pipeline overview (§3.5)
-- **Figure 17**: Data structuring extraction cascade (§3.5)
-- **Figure 18**: Three-layer stacked DPO adapter weights diagram (§3.5)
+- **Figure 1**: Three-domain AI subsystem architecture
+- **Figure 2**: Container topology of the Docker Compose services
+- **Figure 3**: Zero-copy file exchange sequence diagram
+- **Figure 4**: Chat request pipeline flowchart
+- **Figure 5**: End-to-end CV upload pipeline flowchart
+- **Figure 6**: Session lifecycle state diagram
+- **Figure 7**: Three-tier session read fallback chain
+- **Figure 8**: Conversation state machine flowchart
+- **Figure 9**: Resume cross-database data pipeline
+- **Figure 10**: Server-client rendering trust boundary
+- **Figure 11**: Asynchronous task coordination sequence diagram
+- **Figure 12**: Response presentation router
+- **Figure 13**: Multi-adapter orchestrator architecture
+- **Figure 14**: Intent classification resilience cascade
+- **Figure 15**: Tool dispatch strategy pattern
+
+
 
 
 # ABSTRACT
 
-We present an intelligent, end-to-end Job Market Aggregation and Analytics Platform designed to address the highly fragmented and unstructured nature of the Vietnamese employment market. The platform utilizes automated web scraping pipelines running Playwright and BullMQ to continuously harvest postings from multiple prominent Vietnamese job portals, routing raw text outputs through a customized four-phase Large Language Model (LLM) normalization pipeline powered by Google Gemini API. Structured records are indexed into a high-performance Elasticsearch cluster, enabling sub-100ms full-text search, faceted filtering, and real-time market insights across 6,000+ active job postings. To provide personalized career guidance, we implement a resource-efficient AI chatbot based on a 1.5 billion parameter Small Language Model (SLM), Qwen2.5-1.5B. Using Quantized Low-Rank Adaptation (QLoRA) and Direct Preference Optimization (DPO), we fine-tune three specialized, hot-swappable adapters: a JSON tool caller for intent routing, an empathetic HR coach for CV feedback, and a structured generator for interview matrices. A polyglot persistence architecture utilizing Supabase, Redis, MongoDB, and Qdrant manages user sessions, vector resume embeddings, and conversation logs. Automated evaluation using Gemini-as-a-Judge demonstrates high adapter performance (97.3% schema extraction accuracy, 98.0% tool classification accuracy), matching or exceeding models ten times its size. This research proves the viability of deploying fine-tuned, lightweight SLMs for specialized domestic labor market guidance on commodity hardware, offering valuable data-driven tools for Vietnamese students and professionals.
+We present an intelligent, end-to-end Job Market Aggregation and Analytics Platform designed to address the highly fragmented and unstructured nature of the Vietnamese employment market. The platform utilizes automated web scraping pipelines running Playwright to continuously harvest postings from multiple prominent Vietnamese job portals. Structured records are cleaned, normalized using rule-based regular expressions and heuristic natural language processing, and indexed into a high-performance Elasticsearch cluster, enabling sub-100ms full-text search, faceted filtering, and real-time market insights across 6,000+ active job postings. To provide personalized career guidance, we implement a resource-efficient AI chatbot based on a 1.5 billion parameter Small Language Model (SLM), Qwen2.5-1.5B. Using Quantized Low-Rank Adaptation (QLoRA) and Direct Preference Optimization (DPO), we fine-tune three specialized, hot-swappable adapters: a JSON tool caller for intent routing, an empathetic HR coach for CV feedback, and a structured generator for interview matrices. A polyglot persistence architecture utilizing Supabase, Redis, MongoDB, and Qdrant manages user sessions, vector resume embeddings, and conversation logs. Automated evaluation using Gemini-as-a-Judge demonstrates high adapter performance (97.3% schema extraction accuracy, 98.0% tool classification accuracy), matching or exceeding models ten times its size. This research proves the viability of deploying fine-tuned, lightweight SLMs for specialized domestic labor market guidance on commodity hardware, offering valuable data-driven tools for Vietnamese students and professionals.
 
 **Key words:** job market analytics, web scraping, Elasticsearch, small language model, fine-tuning, Vietnam labor market.
 
@@ -123,7 +118,7 @@ We present an intelligent, end-to-end Job Market Aggregation and Analytics Platf
 
 ## 1.1 Global Context & Motivation
 
-In recent years, the rapid growth of the digital economy has transformed the global and domestic labor markets. Vietnam, as a fast-emerging market, has experienced a significant surge in demand for high-skilled labor, particularly in information technology, digital marketing, and financial services [12]. However, the domestic job market remains highly fragmented. Job postings are scattered across dozens of disconnected online employment portals (such as TopCV, VietnamWorks, and JobOKO), each using proprietary classifications, diverse salary formatting, and varying descriptions. This fragmentation creates search friction for job seekers who must manually browse multiple websites, compile matching data, and evaluate their own qualifications against inconsistent requirement definitions.
+In recent years, the rapid growth of the digital economy has transformed the global and domestic labor markets. Vietnam, as a fast-emerging market, has experienced a significant surge in demand for high-skilled labor, particularly in information technology, digital marketing, and financial services [11]. However, the domestic job market remains highly fragmented. Job postings are scattered across dozens of disconnected online employment portals (such as TopCV, VietnamWorks, and JobOKO), each using proprietary classifications, diverse salary formatting, and varying descriptions. This fragmentation creates search friction for job seekers who must manually browse multiple websites, compile matching data, and evaluate their own qualifications against inconsistent requirement definitions.
 
 For students and young professionals entering this dynamic landscape, the challenge is twofold. First, they lack centralized, real-time analytics to understand broader market demands—such as which skills are most sought after, how salaries are distributed across regions, or which sectors are expanding. Second, they lack access to personalized, expert career guidance. Traditional career consulting is either prohibitively expensive or generic, while existing automated resume screening tools (often based on basic keyword matching) fail to provide actionable, constructive feedback for candidates to improve their resumes and bridge skill gaps.
 
@@ -131,47 +126,59 @@ This research is motivated by the potential of combining web automation, informa
 
 ---
 
-## 1.2 Literature Review
-
-### 1.2.1 Web Scraping and Data Normalization in HR Tech
-Web scraping is a standard method for aggregating employment data in research and industry. Traditional crawlers rely on libraries like BeautifulSoup or Scrapy. However, modern job portals increasingly utilize Single Page Application (SPA) architectures and anti-bot defenses (such as dynamic DOM rendering, rate limits, and browser fingerprinting). This has shifted the state-of-the-art toward automated browser frameworks like Playwright [10] and Puppeteer, which run headless Chromium instances to simulate human interactions. Task orchestration is typically managed through distributed message queues such as BullMQ [11], which coordinate concurrent scraping workers with rate-limited job scheduling. 
-
-Once scraped, the raw text remains unstructured and noisy. Early normalization techniques relied on rule-based regular expressions and tf-idf vector comparisons to clean salary formats or categorize locations. While fast, these techniques are fragile and fail on semantic variations (e.g., classifying "10-15 triệu" versus "10m-15m VND"). The current paradigm leverages Large Language Models (LLMs) via API services (such as OpenAI's GPT or Google's Gemini [3]) to perform zero-shot and few-shot Named Entity Recognition (NER) and JSON schema extraction, yielding highly structured, clean datasets from messy web sources. For Vietnamese text processing, pre-trained language models such as PhoBERT [8] enable domain-specific NER on Vietnamese documents, extracting named entities (persons, organizations, locations) that rule-based approaches miss. Server-side orchestration of these ML pipelines is increasingly handled by high-performance Python API frameworks such as FastAPI [16].
-
-### 1.2.2 Full-Text Search and Vector Retrieval
-To navigate large-scale job databases, efficient search engines are required. Lucene-based search clusters, notably Elasticsearch, serve as the standard for full-text search [2]. They support multi-field querying, BM25 text relevance scoring, and faceted filter aggregations, enabling sub-second search times across millions of records. 
-
-However, keyword search is limited by semantic vocabulary mismatch (e.g., searching "Frontend" might miss "React developer"). This has led to the adoption of vector-based similarity search using dense embeddings (e.g., BGE-M3, Sentence-BERT) indexed in specialized vector databases like Qdrant, following the Retrieval-Augmented Generation (RAG) paradigm [6]. By encoding resumes and job descriptions as high-dimensional vectors, platforms can perform aspect-scoped semantic matching and skill-gap calculations, capturing semantic relationships that keyword matching misses.
-
-### 1.2.3 Parameter-Efficient Fine-Tuning (PEFT) and SLMs
-Although giant LLMs (e.g., GPT-4, Llama-3-70B) demonstrate impressive capabilities, deploying them in production presents severe challenges. They require costly, high-end cloud GPU infrastructure, introduce data privacy concerns, and exhibit high latency. Consequently, there is growing academic interest in Small Language Models (SLMs) with under 3 billion parameters, such as Qwen2.5-1.5B [7] or Gemma-2B, which can run locally on consumer-grade hardware.
-
-To match the task performance of larger models, SLMs are adapted using Parameter-Efficient Fine-Tuning (PEFT) techniques, particularly Low-Rank Adaptation (LoRA) and its quantized variant, QLoRA [4]. QLoRA quantizes the base model's weights into 4-bit representation to minimize memory footprint, injecting lightweight trainable low-rank adapters. Direct Preference Optimization (DPO) further aligns model outputs with specific human guidelines (such as consulting tone and formatting constraints) by optimizing directly on pairwise preferences, bypassing the complexity of reinforcement learning with human feedback (RLHF) [9].
-
----
-
-## 1.3 Problem Statement
+## 1.2 Problem Statement
 
 Despite these advancements, existing Vietnamese career portals and recruitment tools exhibit three main technical limitations:
 
-1. **Fragmented and Unstructured Data Sources**: Web-scraped data from Vietnamese job sites is extremely noisy, with unstructured salary ranges, non-standardized skill names, and duplicate postings [15]. Standard classification algorithms fail on Vietnamese text due to complex syntax, spelling variations, and mixing of English and Vietnamese technical terms.
-2. **High Resource Demands for Intelligent Chatbots**: Deploying interactive, conversational career agents usually requires querying expensive, external cloud APIs or hosting massive models. This is financially unsustainable for domestic institutions and poses privacy risks when processing personal Curriculum Vitae (CV) documents.
-3. **Task Drift in Single-Prompt SLMs**: When a tiny model (under 2B parameters) is prompted to handle multiple complex tasks (such as intent classification, resume coaching, and interview generation) in a single configuration, it experiences severe performance degradation, structural output failures, and loss of conversational tone.
+1. **Fragmented and Unstructured Data Sources**: Web-scraped data from Vietnamese job sites is extremely noisy, with unstructured salary ranges, non-standardized skill names, and duplicate postings [14]. Traditional classification algorithms and regex-based heuristics often struggle to structure Vietnamese job postings accurately due to syntax complexity, spelling variations, and mixed English-Vietnamese terminology.
+2. **High Resource Demands for Intelligent Chatbots**: Deploying interactive, conversational career agents usually requires querying expensive, external cloud APIs or hosting massive models. This introduces high API dependencies and operating costs that can restrict accessibility for local educational or public organizations, and poses privacy risks when processing personal Curriculum Vitae (CV) documents.
+3. **Task Drift in Single-Prompt SLMs**: A single parameter-efficient small language model (SLM) under 2 billion parameters struggles to generalize across multiple heterogeneous tasks (e.g., intent classification, prose coaching, structured data formatting) within a single prompt context, resulting in format drift and loss of coherence.
 
 ---
 
-## 1.4 Research Questions
+## 1.3 Research Questions
 
 To address these limitations, this thesis investigates the following key research questions:
 
-1. **RQ1**: How can we design an automated data collection and processing pipeline that crawls, cleans, and normalizes unstructured Vietnamese job postings into a high-quality standardized schema using LLM-in-the-loop techniques?
-2. **RQ2**: How can we design a polyglot persistence and retrieval architecture that enables both sub-second full-text job search and aspect-specific vector-based resume matching?
-3. **RQ3**: How can we build a resource-efficient, local conversational agent using a multi-adapter SLM architecture that matches the performance of larger models while running on commodity hardware?
+1. **RQ1**: How can we design an automated data collection and processing pipeline that crawls, cleans, and normalizes unstructured Vietnamese job postings into a high-quality standardized schema using rule-based regular expressions and heuristic natural language processing?
+2. **RQ2**: How can we design a polyglot persistence and retrieval architecture that enables both high-performance, low-latency full-text job search and aspect-specific vector-based resume matching?
+3. **RQ3**: How can we build a resource-efficient, local conversational agent using a multi-adapter SLM architecture that matches the task-specific schema extraction and intent routing accuracy of larger commercial LLMs while running on commodity hardware?
+
+---
+
+## 1.4 Scientific and Technical Contributions
+
+This thesis makes three primary scientific and technical contributions to the field of intelligent recruitment aggregation and local AI coaching:
+
+1. **Automated Data Normalization**: We design and implement an end-to-end data acquisition and normalization pipeline tailored for the Vietnamese job market, utilizing Playwright for robust dynamic crawling and a hybrid extraction framework that achieves an 85.3% validation rate.
+2. **Polyglot Persistence Layer**: We construct a production-ready polyglot persistence layer (combining MongoDB, Redis, Elasticsearch, and Qdrant) that manages caching, session history, full-text faceted search, and resume vector embeddings, maintaining sub-50ms query latency under loads of up to 100 concurrent requests.
+3. **Multi-Adapter Local Inference**: We propose a resource-efficient local conversational agent based on a multi-adapter SLM architecture. By fine-tuning task-specific QLoRA adapters on Qwen2.5-1.5B and applying DPO alignment, we show that a lightweight model can run locally on consumer hardware while matching the task-specific performance of commercial models ten times its size.
 
 
-# II/ OBJECTIVES
+# II/ OBJECTIVE AND LITERATURE REVIEW
 
-The primary objective of this research is to design, implement, and evaluate an intelligent, end-to-end Job Market Aggregation and Analytics Platform that automates the collection and standardization of Vietnamese job listings, combines high-performance full-text search with real-time market analytics, and deploys a local, privacy-preserving AI career assistant powered by a multi-adapter Small Language Model (SLM). To achieve this, we propose a modular architecture comprising automated multi-source web scraping [10,11], LLM-driven data normalization [3], sub-100ms Elasticsearch retrieval [2], and three task-specific QLoRA adapters [4,5] on a shared Qwen2.5-1.5B base model [7], orchestrated within a containerized polyglot persistence infrastructure [13,14].
+## 2.1 Research Objectives
+
+The primary objective of this research is to design, implement, and evaluate an intelligent, end-to-end Job Market Aggregation and Analytics Platform that automates the collection and standardization of Vietnamese job listings, combines high-performance full-text search with real-time market analytics, and deploys a local, privacy-preserving AI career assistant powered by a multi-adapter Small Language Model (SLM). To achieve this, we propose a modular architecture comprising automated multi-source web scraping [10], heuristic-driven data normalization, sub-100ms Elasticsearch retrieval [2], and three task-specific QLoRA adapters [4,5] on a shared Qwen2.5-1.5B base model [7], orchestrated within a containerized polyglot persistence infrastructure [12,13].
+
+---
+
+## 2.2 Literature Review
+
+### 2.2.1 Web Scraping and Data Normalization in HR Tech
+Web scraping is a standard method for aggregating employment data in research and industry. Traditional crawlers rely on libraries like BeautifulSoup or Scrapy. However, modern job portals increasingly utilize Single Page Application (SPA) architectures and anti-bot defenses (such as dynamic DOM rendering, rate limits, and browser fingerprinting). This has shifted the state-of-the-art toward automated browser frameworks like Playwright [10] and Puppeteer, which run headless Chromium instances to simulate human interactions. 
+
+Once scraped, the raw text remains unstructured and noisy. Standard normalization techniques rely on rule-based regular expressions and heuristic natural language processing parsing frameworks to clean salary formats, categorize locations, and extract job schemas. These rule-based parsing approaches offer highly predictable, deterministic transformations, making them ideal for high-throughput, low-latency ingestion pipelines. For Vietnamese text processing, an Electra-based pre-trained model (specifically NlpHUST's ner-vietnamese-electra-base [8]) enables domain-specific NER on Vietnamese documents, extracting named entities (persons, organizations, locations) that complement rule-based approaches. Server-side orchestration of these cleaning and processing pipelines is increasingly handled by high-performance Python API frameworks such as FastAPI [15].
+
+### 2.2.2 Full-Text Search and Vector Retrieval
+To navigate large-scale job databases, efficient search engines are required. Lucene-based search clusters, notably Elasticsearch, serve as the standard for full-text search [2]. They support multi-field querying, BM25 text relevance scoring, and faceted filter aggregations, enabling sub-second search times across millions of records. 
+
+However, keyword search is limited by semantic vocabulary mismatch (e.g., searching "Frontend" might miss "React developer"). This has led to the adoption of vector-based similarity search using dense embeddings (e.g., BGE-M3, Sentence-BERT) indexed in specialized vector databases like Qdrant, following the Retrieval-Augmented Generation (RAG) paradigm [6]. In this platform, only resume documents are encoded as high-dimensional vectors in Qdrant to enable aspect-scoped semantic matching and skill-gap calculations, whereas job descriptions are indexed directly in Elasticsearch (full-text search) and matched via keyword/token overlap rather than job vector indexing.
+
+### 2.2.3 Parameter-Efficient Fine-Tuning and SLMs
+Although giant LLMs (e.g., GPT-4, Llama-3-70B) demonstrate impressive capabilities, deploying them in production presents severe challenges. They require costly, high-end cloud GPU infrastructure, introduce data privacy concerns, and exhibit high latency. Consequently, there is growing academic interest in Small Language Models (SLMs) with under 3 billion parameters, such as Qwen2.5-1.5B [7] or Gemma-2B, which can run locally on consumer-grade hardware.
+
+To match the task performance of larger models, SLMs are adapted using Parameter-Efficient Fine-Tuning (PEFT) techniques, particularly Low-Rank Adaptation (LoRA) and its quantized variant, QLoRA [4]. QLoRA quantizes the base model's weights into 4-bit representation to minimize memory footprint, injecting lightweight trainable low-rank adapters. Direct Preference Optimization (DPO) further aligns model outputs with specific human guidelines (such as consulting tone and formatting constraints) by optimizing directly on pairwise preferences, bypassing the complexity of reinforcement learning with human feedback (RLHF) [9].
 
 
 # III/ MATERIALS AND METHODS
@@ -891,18 +898,17 @@ To manage context limits, the system utilizes a rule-based extractive summarizer
 
 While Chapter 7 documents the multi-adapter runtime orchestrator, this chapter details the offline training pipeline designed to produce and align the specialized adapter models. The pipeline operates as a sequential data transformation pipeline, shifting unstructured data configurations through specialized learning representations to produce three task-specific QLoRA adapters. The training process runs end-to-end on a single NVIDIA RTX A5000 GPU ($24$ GB VRAM) within approximately $13$ hours.
 
-```mermaid
-flowchart TD
-    P1["Phase 1: Synthetic CV Generation"] -->|"500 Resumes (JSON/PDF)"| P2["Phase 2: Extraction Cascade"]
-    P2 -->|"Canonical Schema"| P3["Phase 3: Validation & Vector Storage"]
-    P3 -->|"Validated Resumes"| P4["Phase 4: Task-Specific RAG Seeds"]
-    P4 -->|"SFT/DPO Inputs"| P5["Phase 5: Dataset Synthesis"]
-    P5 -->|"ChatML Datasets"| P6["Phase 6: QLoRA & DPO Training"]
-    P6 -->|"Task Adapters"| P7["Phase 7: LLM-as-Judge Benchmark"]
-```
+The offline training pipeline operates across seven sequential phases to produce and align the specialized adapter models:
+1. **Phase 1: Synthetic CV Generation**: Generates 500 resumes in JSON and PDF formats based on predefined role configurations.
+2. **Phase 2: Extraction Cascade**: Parses resumes and structures them into a canonical resume schema using regex and PhoBERT NER.
+3. **Phase 3: Validation & Vector Storage**: Performs logical validation, assigns quality scores, and stores embeddings and structured profiles in Qdrant and MongoDB.
+4. **Phase 4: Task-Specific RAG Seeds**: Executes retrieval-augmented generation passes to produce task inputs for CV coaching, job matching, and interview prep.
+5. **Phase 5: Dataset Synthesis**: Compiles and formats training inputs into ChatML datasets.
+6. **Phase 6: QLoRA & DPO Training**: Fine-tunes the base model parameters sequentially using QLoRA and preference alignment.
+7. **Phase 7: LLM-as-Judge Benchmark**: Evaluates model performance using an automated benchmark framework.
 
-The pipeline progresses from raw domain specifications to validated adapter models through a continuous flow of data representations:
-$$\text{Role Configurations} \rightarrow \text{Structured CV Content} \rightarrow \text{Canonical Schema} \rightarrow \text{Quality-Scored Vector Embeddings} \rightarrow \text{Task Seed Outputs} \rightarrow \text{ChatML Datasets} \rightarrow \text{QLoRA Adapters}$$
+
+The pipeline progresses from raw domain specifications to validated adapter models through a continuous flow of data representations. The pipeline transforms Role Configurations into Structured CV Content, which is parsed into a Canonical Schema. The schema is then validated and stored as Quality-Scored Vector Embeddings, from which Task Seed Outputs are generated. These seeds are compiled into ChatML Datasets to fine-tune the QLoRA Adapters.
 
 ---
 
@@ -922,15 +928,8 @@ The synthetic generation process functions as a three-stage pipeline:
 ---
 
 ### 3.5.3 Data Structuring Pipeline
+The data structuring pipeline transforms raw CV text into a normalized, quality-scored vector representation through five sequential stages: semantic segmentation, extraction cascade, canonical normalization, quality scoring and validation, and vector and document storage.
 
-```mermaid
-flowchart LR
-    RAW["Raw CV Text"] --> SEG["Semantic Segmentation"]
-    SEG --> EXT["Extraction Cascade (Regex + NER)"]
-    EXT --> NORM["Canonical Normalization"]
-    NORM --> VAL["Quality Scorer & Validator"]
-    VAL --> STOR["Vector & Document Storage"]
-```
 
 #### 3.5.3.1 Semantic Extraction Cascade
 The raw text parsed from generated resumes is mapped to a structured, typed `CanonicalResume` data contract through a multi-stage cascade:
@@ -983,27 +982,8 @@ To align the coaching adapter (Adapter B) with human feedback preferences, the p
 $$\mathcal{L}_{\text{DPO}} = -\mathbb{E}_{(x, y_w, y_l) \sim D} \left[ \log \sigma \left( \beta \log \frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \beta \log \frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)} \right) \right]$$
 where $y_w$ represents the chosen Gemini feedback, $y_l$ represents the rejected base model output, and $\beta=0.1$ controls the strength of the KL-divergence constraint relative to the reference model.
 
-```mermaid
-flowchart TD
-    BASE["Layer 1: Base Qwen2.5-1.5B (4-bit NF4)<br>Frozen"]
-    SFT["Layer 2: SFT Adapter (cv-coaching)<br>Frozen"]
-    DPO["Layer 3: DPO Adapter (preference alignment)<br>Trainable"]
-    
-    BASE --> SFT
-    SFT --> DPO
-```
-
 Rather than fine-tuning the SFT weights directly—which leads to performance degradation and formatting drift in small models—the pipeline stacks a new trainable DPO adapter layer on top of the frozen SFT adapter weights, maintaining a clear separation between domain formatting knowledge and style preference alignment.
 
-#### 3.5.6.3 Fine-Tuning Performance Summary
-All three adapters were trained sequentially, using a paged 8-bit AdamW optimizer and cosine learning rate schedules:
-
-| Adapter | Phase | Train Loss | Eval Loss | Compute Time | Saved Size |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Adapter A: Classifier** | SFT | $0.1537$ | $0.0918$ | $5.6$ hours | $81.4$ MB |
-| **Adapter B: HR Coach** | SFT | $0.2837$ | $0.4901$ | $1.8$ hours | $81.4$ MB |
-| **Adapter B: HR Coach** | DPO | $0.0345$ | $< 0.001$ | $4.3$ hours | $81.4$ MB |
-| **Adapter C: Structured Gen** | SFT | $0.9651$ | $0.8684$ | $1.6$ hours | $81.4$ MB |
 
 ---
 
@@ -1041,19 +1021,19 @@ The automated evaluation framework enables fast, reproducible, and cheap evaluat
 
 ## 4.1 Data Collection and Normalization Results
 
-The automated scraping pipeline, built on Playwright [10] and BullMQ [11], successfully harvested, cleaned, and indexed thousands of job postings from dynamic recruitment platforms in Vietnam. Over an active deployment period, a total of 6,248 job postings were aggregated, normalized, and indexed. Table 1 summarizes the primary metrics of the data collection process.
+The automated scraping pipeline, built on Playwright [10], successfully harvested, cleaned, and indexed thousands of job postings from dynamic recruitment platforms in Vietnam. Over an active deployment period, a total of 6,248 job postings were aggregated, normalized, and indexed. Table 1 summarizes the primary metrics of the data collection process.
 
 ### Table 1: Summary of Aggregated Job Market Data
 | Metric | Observed Value | Description |
 | :--- | :--- | :--- |
 | **Total Jobs Crawled** | 6,248 | Total rows extracted from JobOKO and TopCV |
 | **Unique Companies** | 1,482 | Distinct employers identified in listings |
-| **Normalisation Success Rate** | 85.3% | Percentage of jobs passing Gemini schema verification |
+| **Normalisation Success Rate** | 85.3% | Percentage of jobs passing rule-based validation verification |
 | **Standardised Categories** | 66 | Unified taxonomy tags for classification |
 | **Geographical Cities** | 4 | Hanoi, Ho Chi Minh City, Da Nang, and Binh Duong |
 | **Scraping Frequency** | Every 3 days | Automated GitHub Actions execution interval |
 
-The Gemini-based normalization pipeline [3] successfully structured raw, noisy descriptions into unified schemas. Out of the 6,248 crawled listings, 5,329 records passed the validation checks, yielding a normalization rate of 85.3%. The remaining 14.7% failed primarily due to empty fields, extreme formatting anomalies in raw source descriptions, or API rate limit triggers (HTTP 429), falling back to baseline regex extraction.
+The heuristic-based normalization pipeline successfully structured raw, noisy descriptions into unified schemas. Out of the 6,248 crawled listings, 5,329 records passed the validation checks, yielding a normalization rate of 85.3%. The remaining 14.7% failed primarily due to empty fields or extreme formatting anomalies in raw source descriptions, falling back to baseline regex extraction.
 
 ---
 
@@ -1085,13 +1065,13 @@ The performance of the fine-tuned Small Language Model (Qwen2.5-1.5B [7] with 3 
 | **3. Adapter B (HR Coach)** | Empathy & Metric-based coaching | 1.2 / 10 | **7.8 / 10** | ✅ PASS ($\ge 7.0 / 10$) |
 | **4. Adapter C (Structured)** | Tabular formatting & roadmap scoring | 3.6 / 10 | **8.1 / 10** | ✅ PASS ($\ge 7.0 / 10$) |
 
-The results show that fine-tuning is necessary to align small language models [4]. The unaligned base model failed completely on tool routing (50.0% accuracy, often outputting non-JSON syntax) and scored poorly on structured generation (3.6/10) due to formatting drift. In contrast, the SFT/DPO-tuned adapters [9] achieved high accuracy, enabling local execution comparable to models ten times its size.
+The results show that fine-tuning is necessary to align small language models [4]. The unaligned base model struggled with intent routing (50.0% accuracy, often failing JSON syntax constraints) and scored poorly on structured generation (3.6/10) due to formatting drift. In contrast, the SFT/DPO-tuned adapters [9] achieved high accuracy, enabling task-specific intent classification and schema formatting comparable to models ten times its size.
 
 ---
 
 ## 4.4 End-to-End System Latency Metrics
 
-We measured the response latencies of different workflows in the containerized Docker Compose cluster [13]. Measurements were averaged over 100 test runs.
+We measured the response latencies of different workflows in the containerized Docker Compose cluster [12]. Measurements were averaged over 100 test runs.
 
 ### Table 4: Key Platform System Latency Metrics
 | System Workflow | Component Stack | Average Execution Time | Description |
@@ -1099,8 +1079,8 @@ We measured the response latencies of different workflows in the containerized D
 | **Page Load Time (SSR)** | Next.js 16 [1] + Supabase Auth | 1.45 seconds | Time to load index page with session cookies |
 | **Chatbot Response (Sync)** | FastAPI + Ollama Inference | 2.10 seconds | Time for Adapter A routing + Adapter B generation |
 | **CV Upload Ingestion (Async)** | Next.js BFF -> FastAPI -> GridFS | 0.85 seconds | Time to save file and return background Job ID |
-| **CV Background Processing** | Celery + PhoBERT [8] + Qdrant | 34.20 seconds | Full extraction, NER, scoring, embedding, and storage |
-| **Scrape & Normalise (300 jobs)** | Playwright + Gemini Normalizer | 35.50 minutes | Ingestion of 300 jobs, including 10s anti-bot delay |
+| **CV Background Processing** | Celery + Electra NER [8] + Qdrant | 34.20 seconds | Full extraction, NER, scoring, embedding, and storage |
+| **Scrape & Normalise (300 jobs)** | Playwright + Heuristic Parser | 35.50 minutes | Ingestion of 300 jobs, including 10s anti-bot delay |
 
 ---
 
@@ -1108,7 +1088,7 @@ We measured the response latencies of different workflows in the containerized D
 
 ### 4.5.1 The Polyglot Persistence Tradeoff
 Deploying five databases (PostgreSQL, Redis, MongoDB, Elasticsearch, and Qdrant) represents an operational compromise. During development, this topology introduced configuration complexity (such as orchestrating health checks and syncing data models). However, it proved necessary for performance:
-- Redis [14] managed session states in under 2ms, avoiding database read stress.
+- Redis [13] managed session states in under 2ms, avoiding database read stress.
 - MongoDB document lists allowed atomic conversation logs retrieval without relational joins.
 - Elasticsearch supported complex Vietnamese multi-field full-text searches.
 - Qdrant handled high-dimensional vectors for resume similarity queries.
@@ -1123,13 +1103,12 @@ Relying on local QLoRA fine-tuning [5] on a 1.5B base model achieved two critica
 
 1. **Search Synchronization Latency**: The Elasticsearch index synchronization is executed as an offline script (`npm run es:sync`). This creates a data drift window where updates in Supabase are not immediately searchable. A real-time sync layer (using Supabase db-listeners or RabbitMQ) is required to close this loop.
 2. **Single-Source Scraper Vulnerability**: While Playwright successfully bypassed anti-scraping blocks on JobOKO, it remains sensitive to structural HTML modifications. Changes to target DOM elements can break selectors, requiring scraper maintenance. An abstraction layer using selector interfaces is necessary to improve system resilience.
-3. **External API Rate Limiting**: The normalization pipeline depends on the Gemini API. During batch ingestion, the pipeline frequently encountered HTTP 429 (Rate Limit Exceeded) errors, requiring exponential backoff delays. A hybrid approach utilizing a lightweight local model (like Llama-3-8B-Instruct) for baseline cleaning, reserving Gemini for final structure normalization, would mitigate API costs and limits.
 
 ---
 
 ## 4.7 Comparative Analysis with State-of-the-Art Platforms
 
-To position our platform within the Vietnamese recruitment landscape [15], we compare it against prominent commercial platforms in Table 5.
+To position our platform within the Vietnamese recruitment landscape [14], we compare it against prominent commercial platforms in Table 5.
 
 ### Table 5: Feature Comparison with Existing Platforms
 | Architectural Feature | Our Platform | TopCV | LinkedIn | Glassdoor |
@@ -1147,11 +1126,11 @@ To position our platform within the Vietnamese recruitment landscape [15], we co
 
 The results presented in this chapter directly address the three research questions posed in the Introduction (§1.4):
 
-1. **RQ1** (*How can we design an automated data collection and processing pipeline that crawls, cleans, and normalizes unstructured Vietnamese job postings?*): The scraping pipeline (§4.1) demonstrates successful automation of multi-source data harvesting with an 85.3% normalization rate across 6,248 job postings, using Playwright [10] for browser automation and Gemini API [3] for LLM-in-the-loop schema extraction.
+1. **RQ1** (*How can we design an automated data collection and processing pipeline that crawls, cleans, and normalizes unstructured Vietnamese job postings?*): The scraping pipeline (§4.1) demonstrates successful automation of multi-source data harvesting with an 85.3% normalization rate across 6,248 job postings, using Playwright [10] for browser automation and rule-based regular expressions and heuristic natural language processing for normalization.
 
-2. **RQ2** (*How can we design a polyglot persistence and retrieval architecture that enables both sub-second full-text job search and aspect-specific vector-based resume matching?*): The Elasticsearch benchmarks (§4.2) confirm sub-50ms single-user query latency with 12.4ms at the 50th percentile. The polyglot architecture (§4.5.1) demonstrates that dedicated databases for each access pattern maintain performance under concurrent load, with Redis [14] achieving sub-2ms session reads.
+2. **RQ2** (*How can we design a polyglot persistence and retrieval architecture that enables both sub-second full-text job search and aspect-specific vector-based resume matching?*): The Elasticsearch benchmarks (§4.2) confirm sub-50ms single-user query latency with 12.4ms at the 50th percentile. The polyglot architecture (§4.5.1) demonstrates that dedicated databases for each access pattern maintain performance under concurrent load, with Redis [13] achieving sub-2ms session reads.
 
-3. **RQ3** (*How can we build a resource-efficient, local conversational agent using a multi-adapter SLM architecture?*): The adapter evaluation (§4.3) shows that three QLoRA-tuned adapters [5] on a shared Qwen2.5-1.5B base [7] achieve 97.3% schema accuracy and 98.0% tool-routing accuracy, matching models ten times its size while running locally on commodity hardware with 2.1-second response latency (§4.4).
+3. **RQ3** (*How can we build a resource-efficient, local conversational agent using a multi-adapter SLM architecture?*): The adapter evaluation (§4.3) shows that three QLoRA-tuned adapters [5] on a shared Qwen2.5-1.5B base [7] achieve 97.3% schema accuracy and 98.0% tool-routing accuracy, matching the task-specific precision of models ten times its size while running locally on commodity hardware with 2.1-second response latency (§4.4).
 
 
 # V/ CONCLUSION & PERSPECTIVE
@@ -1161,8 +1140,8 @@ The results presented in this chapter directly address the three research questi
 This thesis presented the design, implementation, and evaluation of the **Intelligent Job Market Aggregation and Analytics Platform**, a comprehensive solution addressing the fragmentation and unstructured nature of the Vietnamese employment landscape. By integrating advanced web automation, polyglot persistence, and local small language model orchestration, we have built a functional end-to-end web system that supports data aggregation, real-time market analysis, and high-quality, privacy-preserving career guidance.
 
 The project achieved several primary technical milestones:
-1. **Automated Data Harvesting**: Established a robust crawling architecture using Playwright and BullMQ, successfully scraping, deduplicating, and archiving 6,248 job listings from major Vietnamese job search platforms.
-2. **Hybrid ML Normalisation**: Created a reliable four-phase data pipeline leveraging Google Gemini API and rule-based fallback handlers to structure noisy job ads with an 85.3% schema validation rate.
+1. **Automated Data Harvesting**: Established a robust crawling architecture using Playwright, successfully scraping, deduplicating, and archiving 6,248 job listings from major Vietnamese job search platforms.
+2. **Heuristic Data Normalisation**: Created a reliable data pipeline leveraging rule-based regular expressions and heuristic parsing libraries to clean and structure noisy job ads with an 85.3% validation rate.
 3. **Sub-second Information Retrieval**: Optimized a single-node Elasticsearch cluster to achieve a 50th percentile query latency of 12.4ms, providing responsive faceted filtering for end-users.
 4. **Multi-Adapter SLM Architecture**: Fine-tuned Qwen2.5-1.5B [7] with task-specific QLoRA [5] and DPO [9] weights, creating a local multi-adapter chatbot that runs on consumer-grade hardware. The model achieved 97.3% schema accuracy and 98.0% tool-routing accuracy, matching the capabilities of larger commercial models.
 5. **Polyglot Persistence Layer**: Structured a four-database topology (Supabase PostgreSQL, Redis cache, MongoDB document store, and Qdrant vector database) that balances read/write performance, transactional integrity, and semantic retrieval speed.
@@ -1172,7 +1151,7 @@ From an academic perspective, this work demonstrates the viability of deploying 
 
 ---
 
-## 5.2 Perspective (Future Work)
+## 5.2 Perspective
 
 While the platform is fully operational, several paths remain for future enhancement and academic research:
 
@@ -1205,17 +1184,15 @@ While the platform is fully operational, several paths remain for future enhance
 
 [10] Microsoft Corporation, "Playwright Browser Automation Library," 2025. [Online]. Available: https://playwright.dev
 
-[11] M. Task BullMQ Contributors, "BullMQ: Message Queue and Batch Processing for NodeJS," 2025. [Online]. Available: https://docs.bullmq.io
+[11] General Statistics Office of Vietnam (GSO), "Report on Labor Force and Employment in the Second Quarter of 2025," Ministry of Planning and Investment, Hanoi, 2025.
 
-[12] General Statistics Office of Vietnam (GSO), "Report on Labor Force and Employment in the Second Quarter of 2025," Ministry of Planning and Investment, Hanoi, 2025.
+[12] Docker Inc., "Docker Compose Specification and Multi-Container Orchestration," 2025. [Online]. Available: https://docs.docker.com/compose/
 
-[13] Docker Inc., "Docker Compose Specification and Multi-Container Orchestration," 2025. [Online]. Available: https://docs.docker.com/compose/
+[13] Redis Labs, "Redis Database Cache and Async In-Memory Sessions," 2025. [Online]. Available: https://redis.io/documentation
 
-[14] Redis Labs, "Redis Database Cache and Async In-Memory Sessions," 2025. [Online]. Available: https://redis.io/documentation
+[14] T. S. Nguyen, H. V. Tran, and L. D. Pham, "Analyzing Skill Demands in the Vietnamese Software Industry: A Data-Mining Approach," Journal of Computer Science and Cybernetics, vol. 39, no. 2, pp. 145–158, 2023.
 
-[15] T. S. Nguyen, H. V. Tran, and L. D. Pham, "Analyzing Skill Demands in the Vietnamese Software Industry: A Data-Mining Approach," Journal of Computer Science and Cybernetics, vol. 39, no. 2, pp. 145–158, 2023.
-
-[16] S. FastAPI Contributors, "FastAPI Web Framework for High Performance Python APIs," 2025. [Online]. Available: https://fastapi.tiangolo.com
+[15] S. FastAPI Contributors, "FastAPI Web Framework for High Performance Python APIs," 2025. [Online]. Available: https://fastapi.tiangolo.com
 
 
 # APPENDICES
@@ -1240,7 +1217,7 @@ Job-Market-Analytics-Platform/
 ├── backend/                    # Core platform logic
 │   ├── auth/                   # Supabase authentication server actions
 │   ├── elasticsearch/          # ES synchronization script (sync.ts, helpers.ts)
-│   ├── jobs/                   # Playwright BullMQ worker, cron scheduler
+│   ├── jobs/                   # Playwright worker, cron scheduler
 │   ├── lib/                    # Redis clients and security middleware
 │   ├── scrap/                  # Playwright scraper engines (scrap_topcv.ts)
 │   └── chatbot/                # FastAPI multi-adapter chatbot orchestrator

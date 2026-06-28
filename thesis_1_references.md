@@ -20,14 +20,12 @@
 
 [10] Microsoft Corporation, "Playwright Browser Automation Library," 2025. [Online]. Available: https://playwright.dev
 
-[11] M. Task BullMQ Contributors, "BullMQ: Message Queue and Batch Processing for NodeJS," 2025. [Online]. Available: https://docs.bullmq.io
+[11] General Statistics Office of Vietnam (GSO), "Report on Labor Force and Employment in the Second Quarter of 2025," Ministry of Planning and Investment, Hanoi, 2025.
 
-[12] General Statistics Office of Vietnam (GSO), "Report on Labor Force and Employment in the Second Quarter of 2025," Ministry of Planning and Investment, Hanoi, 2025.
+[12] Docker Inc., "Docker Compose Specification and Multi-Container Orchestration," 2025. [Online]. Available: https://docs.docker.com/compose/
 
-[13] Docker Inc., "Docker Compose Specification and Multi-Container Orchestration," 2025. [Online]. Available: https://docs.docker.com/compose/
+[13] Redis Labs, "Redis Database Cache and Async In-Memory Sessions," 2025. [Online]. Available: https://redis.io/documentation
 
-[14] Redis Labs, "Redis Database Cache and Async In-Memory Sessions," 2025. [Online]. Available: https://redis.io/documentation
+[14] T. S. Nguyen, H. V. Tran, and L. D. Pham, "Analyzing Skill Demands in the Vietnamese Software Industry: A Data-Mining Approach," Journal of Computer Science and Cybernetics, vol. 39, no. 2, pp. 145–158, 2023.
 
-[15] T. S. Nguyen, H. V. Tran, and L. D. Pham, "Analyzing Skill Demands in the Vietnamese Software Industry: A Data-Mining Approach," Journal of Computer Science and Cybernetics, vol. 39, no. 2, pp. 145–158, 2023.
-
-[16] S. FastAPI Contributors, "FastAPI Web Framework for High Performance Python APIs," 2025. [Online]. Available: https://fastapi.tiangolo.com
+[15] S. FastAPI Contributors, "FastAPI Web Framework for High Performance Python APIs," 2025. [Online]. Available: https://fastapi.tiangolo.com

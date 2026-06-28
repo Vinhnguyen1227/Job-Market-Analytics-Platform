@@ -5,6 +5,50 @@ The foundation of the CareerIntel platform is a highly resilient, polyglot micro
 
 This chapter focuses on the four core platform services that underpin the data management and user-facing layers (Next.js, Elasticsearch, Redis, MongoDB). The remaining three services—`chatbot-api`, `celery-worker`, and `qdrant`—form the AI Chatbot subsystem and are documented in the companion thesis (Thesis 1).
 
+The following system-wide data flow diagram illustrates how each chapter in this thesis corresponds to distinct architectural stages and data movements across the platform:
+
+```mermaid
+flowchart TD
+    subgraph Ch2["Chapter 2: Data Acquisition"]
+        SCRAPE["Playwright Scrapers"]
+        NORM["Offline Normalization"]
+    end
+
+    subgraph Ch3["Chapter 3: Polyglot Persistence"]
+        SUPA[("Supabase (PostgreSQL)<br/>Source of Truth")]
+        REDIS[("Redis Cache<br/>Sessions & Security")]
+    end
+
+    subgraph Ch4["Chapter 4: Search Engine"]
+        ES[("Elasticsearch Index")]
+        SYNC["sync.ts Sync Pipeline"]
+    end
+
+    subgraph Ch5["Chapter 5: Auth & Security"]
+        AUTH["Supabase Auth / Server Actions"]
+        SEC["JWT Blacklist & Rate Limiting"]
+    end
+
+    subgraph Ch6["Chapter 6: Next.js Frontend"]
+        UI["App Router UI / Pages"]
+        STATE["URL-driven Search State"]
+    end
+
+    %% Flows
+    SCRAPE -->|"Upsert raw"| SUPA
+    NORM -->|"Upsert normalized"| SUPA
+    SUPA -->|"Batch pagination"| SYNC
+    SYNC -->|"Bulk push"| ES
+    
+    UI -->|"1. Auth request"| AUTH
+    AUTH -->|"2. Identity check"| SUPA
+    AUTH -.->|"3. Blacklist/Rate limit"| SEC
+    SEC -.->|"Read/Write"| REDIS
+    
+    UI -->|"4. Faceted Search"| STATE
+    STATE -->|"5. Search query"| ES
+```
+
 ## 1.2 Core Platform Topology
 The primary user-facing and data management layers of the application are supported by the following containerized services:
 - **`next-app`**: The Next.js 16 (App Router) frontend serving both Server-Side Rendered (SSR) web pages and API routes (`port 3000`). It acts as the primary gateway for users interacting with the job search interface and user profiles.
@@ -62,7 +106,7 @@ The `next-app` service is deployed using a highly optimized, multi-stage Dockerf
 ## 1.4 Database Health Probing & Startup Sequencing
 In a distributed microservices environment, strict boot sequencing is mandatory to prevent cascade failures when upstream dependencies are unresponsive. CareerIntel implements comprehensive database health probing directly within the `docker-compose.yml`.
 
-Services do not blindly depend on container startup; instead, they utilize the `depends_on` configuration coupled with `condition: service_healthy`.
+Most application services do not blindly depend on container startup; instead, they utilize the `depends_on` configuration coupled with `condition: service_healthy` to gate boot sequence.
 
 | Service | Health Check Command | Interval | Start Period |
 |---------|---------------------|----------|-------------|
@@ -71,6 +115,10 @@ Services do not blindly depend on container startup; instead, they utilize the `
 | **Elasticsearch** | `curl _cluster/health` (status: green/yellow) | 30s | 60s |
 
 The Next.js and FastAPI application containers are instructed by Docker Compose to halt their startup procedures until these specific health conditions evaluate to true, guaranteeing a robust boot process. Notably, the Redis health check includes the authentication password flag (`-a`), verifying not just TCP connectivity but the full authentication layer. MongoDB's generous 20-second start period accommodates disk initialization latency, while Elasticsearch's 60-second start period allows time for JVM warmup and shard allocation.
+
+However, two exceptions are intentionally designed in this sequencing:
+1. **Celery Worker**: The `celery-worker` service utilizes a basic `depends_on` array containing `[redis, qdrant]` without health conditions. This allows the worker to launch concurrently with database start, as Celery natively handles connection retries for its message broker and lazily initializes its connection to the Qdrant client only when a CV processing task is dequeued.
+2. **Chatbot API MongoDB Connection**: The `chatbot-api` service connects to MongoDB at runtime for session history logs, but it does not declare a `depends_on` health condition for the `mongodb` service. Because MongoDB is fast-booting and the Chatbot API establishes session history connections lazily, omitting this dependency speeds up synchronous API container boot times without compromising reliability.
 
 ## 1.5 Internal Docker DNS Service Discovery
 To eliminate the fragility of hardcoded IP addresses, the architecture leverages Docker's internal DNS resolver. All containers reside within a default bridge network. Consequently, services map to each other using their logical container names:

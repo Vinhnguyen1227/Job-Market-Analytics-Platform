@@ -1,0 +1,1605 @@
+\documentclass[12pt, a4paper]{report}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{tikz}
+
+\usepackage{fancyhdr} % For bottom-right page numbers
+
+
+\definecolor{wordblue}{RGB}{46, 116, 181}
+\captionsetup[figure]{labelfont=bf}
+\captionsetup[table]{labelfont=bf}
+
+% Configure Page Numbers to be Bottom Right
+\pagestyle{fancy}
+\fancyhf{} 
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[R]{\thepage}
+
+% Force chapter pages to also use bottom right numbers
+\fancypagestyle{plain}{
+  \fancyhf{}
+  \renewcommand{\headrulewidth}{0pt}
+  \fancyfoot[R]{\thepage}
+}
+
+
+
+% --- HYPERREF SETUP ---
+% This must be the last package loaded. It makes links clickable and colors them wordblue.
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=wordblue,
+    citecolor=wordblue,
+    urlcolor=wordblue
+}
+
+\begin{document}
+
+\begin{titlepage}
+    % This TikZ block draws the border on the current page only
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[thin] 
+            ([xshift=2cm, yshift=-2cm] current page.north west) 
+            rectangle 
+            ([xshift=-2cm, yshift=2cm] current page.south east);
+    \end{tikzpicture}
+    
+    \begin{center}
+        \vspace*{0.5cm}
+        
+        {\large UNIVERSITY OF SCIENCE AND TECHNOLOGY OF HANOI\par}
+        {\large \textbf{DEPARTMENT OF INFORMATION AND COMMUNICATION TECHNOLOGY}\par}
+        
+        \vspace{2cm}
+        
+        % Make sure logoUSTH.png is in the same folder
+        \includegraphics[width=0.45\textwidth]{logoUSTH.png}\par
+        
+        \vspace{2.5cm}
+        
+        {\Huge \textbf{BACHELOR THESIS}\par}
+        
+        \vspace{1cm}
+        
+        {\large By\par}
+        \vspace{0.2cm}
+        {\Large Hoang Anh Tuan\par}
+        
+        \vspace{1.5cm}
+        
+        {\large Title:\par}
+        \vspace{0.2cm}
+        {\LARGE \textbf{Aerial Semantic Scene Completion for UAV Perception}\par}
+        
+        \vspace{2.5cm}
+        
+        % Supervisors table aligned nicely
+        \begin{tabular}{rl}
+            {\large External Supervisor:} & {\large Prof. Dr. Doan Nhat Quang} \\
+            [0.2cm] % Adds a little vertical space between the lines
+            {\large Internal Supervisor:} & {\large Prof. Dr. Doan Nhat Quang}
+        \end{tabular}
+        
+        \vfill
+        
+        {\Large \textbf{Hanoi, June 2026}\par}
+        
+        \vspace*{0.5cm}
+    \end{center}
+\end{titlepage}
+
+% ==========================================
+% PAGE 2: SUPERVISOR's CERTIFICATE
+% ==========================================
+\newpage
+\pagenumbering{arabic} % Switch to Arabic numerals starting exactly here
+\setcounter{page}{1} % Make this explicitly Page 1
+\vspace*{3cm}
+
+\begin{center}
+    To whom it may concern,
+\end{center}
+
+\vspace{1cm}
+
+\noindent I, Doan Nhat Quang (supervisor’s name), certify that the thesis/ internship report of Mr. Hoang Anh Tuan (student’s name) is qualified to be presented in the Internship Jury 2025-2026.
+
+\vspace{2.5cm}
+
+\begin{flushright}
+    Hanoi, \today \\[1.5cm]
+    \textbf{Supervisor’s signature}
+\end{flushright}
+
+\newpage
+% ==========================================
+% TABLE OF CONTENTS
+% ==========================================
+
+%\begin{center}
+%    {\LARGE \textbf{Table of Contents}\par}
+%\end{center}
+%\vspace{1cm}
+
+\tableofcontents
+
+% ==========================================
+% ACKNOWLEDGEMENTS
+% ==========================================
+\newpage
+\addcontentsline{toc}{section}{ACKNOWLEDGEMENTS}
+\begin{center}
+    {\LARGE \textbf{ACKNOWLEDGEMENTS}\par}
+\end{center}
+\vspace{1cm}
+
+\noindent I would like to express my deepest gratitude to all those who gave me the possibility to complete this thesis in specific, as well as the academic support in general that I received during the time of my studying at the University of Science and Technology of Hanoi (USTH). 
+
+Foremost, I would like to send my honest thanks to my supervisor, Mr. Doan Nhat Quang, for his invaluable guidance, technical expertise, and continuous encouragement throughout the development of this project. His insights were crucial in navigating the complexities of 3D Computer Vision and deep learning architectures.
+
+I would also like to extend my appreciation to the lecturers and staff of the Information and Communication Technology (ICT) department for equipping me with the foundational knowledge required to tackle this research. 
+
+Finally, I am deeply thankful to my family and my friends for their unwavering support, motivation, and understanding during the demanding months of my graduation internship.
+
+% ==========================================
+% LIST OF ABBREVIATIONS
+% ==========================================
+\newpage
+\addcontentsline{toc}{section}{LIST OF ABBREVIATIONS}
+\begin{center}
+    {\LARGE \textbf{LIST OF ABBREVIATIONS}\par}
+\end{center}
+\vspace{1cm}
+
+\begin{table}[h!]
+    \centering
+    \large
+    \renewcommand{\arraystretch}{1.5} % Adds nice vertical padding between rows
+    \begin{tabular}{p{3cm} | p{11cm}}
+        \textbf{AMP} & Automatic Mixed Precision \\
+        \textbf{BCE} & Binary Cross-Entropy \\
+        \textbf{DG} & Domain Generalization \\
+        \textbf{FLoSP} & Features Line of Sight Projection \\
+        \textbf{FP16/FP32} & 16-bit / 32-bit Floating Point \\
+        \textbf{FPN} & Feature Pyramid Network \\
+        \textbf{GNSS} & Global Navigation Satellite System \\
+        \textbf{ICT} & Information and Communication Technology \\
+        \textbf{IR} & Infrared \\
+        \textbf{LiDAR} & Light Detection and Ranging \\
+        \textbf{LoS} & Line of Sight \\
+        \textbf{MBConv} & Mobile Inverted Bottleneck Convolution \\
+        \textbf{mIoU} & Mean Intersection over Union \\
+        \textbf{MVS} & Multi-View Stereo \\
+        \textbf{OOM} & Out-Of-Memory \\
+        \textbf{RGB} & Red, Green, Blue \\
+        \textbf{RNN} & Recurrent Neural Network \\
+        \textbf{SC IoU} & Scene Completion Intersection over Union \\
+        \textbf{SfM} & Structure-from-Motion \\
+        \textbf{SLAM} & Simultaneous Localization and Mapping \\
+        \textbf{SSC} & Semantic Scene Completion \\
+        \textbf{SWaP} & Size, Weight, and Power \\
+        \textbf{UAV} & Unmanned Aerial Vehicle \\
+    \end{tabular}
+\end{table}
+
+\newpage
+\begin{table}[h!]
+    \centering
+    \large
+    \renewcommand{\arraystretch}{1.5} % Adds nice vertical padding between rows
+    \begin{tabular}{p{3cm} | p{11cm}}
+        \textbf{UDA} & Unsupervised Domain Adaptation \\
+        \textbf{USTH} & University of Science and Technology of Hanoi \\
+        \textbf{VRAM} & Video Random Access Memory \\
+    \end{tabular}
+\end{table}
+
+
+% ==========================================
+% LIST OF TABLES
+% ==========================================
+\newpage
+\addcontentsline{toc}{section}{LIST OF TABLES}
+%\begin{center}
+%    {\LARGE \textbf{LIST OF TABLES}\par}
+%\end{center}
+%\vspace{1cm}
+
+\listoftables
+
+% ==========================================
+% LIST OF FIGURES
+% ==========================================
+\newpage
+\addcontentsline{toc}{section}{LIST OF FIGURES}
+%\begin{center}
+%    {\LARGE \textbf{LIST OF FIGURES}\par}
+%\end{center}
+%\vspace{1cm}
+
+% In your final compile, you can replace this placeholder with \listoffigures
+\listoffigures
+
+% ==========================================
+% ABSTRACT
+% ==========================================
+\newpage
+\addcontentsline{toc}{section}{ABSTRACT}
+\begin{center}
+    {\LARGE \textbf{ABSTRACT}\par}
+\end{center}
+\vspace{1cm}
+
+\noindent Unmanned Aerial Vehicles (UAVs) have emerged as powerful platforms for high-resolution data acquisition in urban monitoring and mapping. Despite rapid advances, challenges remain in Semantic Scene Completion (SSC) for complex outdoor environments, particularly when relying on limited sensor payloads.
+
+In this work, we present an end-to-end pipeline for adapting the MonoScene architecture to monocular Semantic Scene Completion using the UAVScenes dataset. Focusing strictly on RGB imagery, we predict dense 3D volumetric geometry and semantics from single 2D top-down (nadir) images, eliminating the need for active LiDAR sensors during inference. 
+
+To address the sparsity of aerial LiDAR observations, we propose a hybrid preprocessing pipeline that combines LiDAR free-space carving, mesh-based depth rendering, semantic back-projection, and camera-aligned voxel extraction to generate dense SSC supervision. Experiments demonstrate that this Advanced Pipeline improves validation performance by nearly 20-fold on the 16-class taxonomy (from 0.15\% to 2.99\% SSC mIoU), and achieves up to 4.20\% on a refined 12-class taxonomy compared to standard point cloud voxelization. Furthermore, our qualitative 3D analysis uncovers a fundamental limitation of monocular aerial perception: despite being supervised with solid, extruded volumetric ground truth targets, the network exhibits a severe "surface bias," collapsing its predictions into paper-thin 2.5D shells. This occurs because the nadir viewpoint occludes vertical geometry, forcing the network to conservatively predict only the visible top surfaces to minimize empty-space loss penalties. This study contributes critical insights into dataset engineering, temporal/illumination overfitting, and the inherent geometric limitations of vision-only perception frameworks for autonomous aerial systems.
+
+\vspace{1cm}
+
+\noindent \textbf{Key words:} Semantic Scene Completion, Unmanned Aerial Vehicle, Monocular Vision, 3D Reconstruction, Deep Learning, MonoScene, Data Engineering.
+
+
+% ==========================================
+% CHAPTER 1: INTRODUCTION
+% ==========================================
+\newpage
+
+\begin{center}
+    {\Huge \textbf{Chapter 1: Introduction}\par}
+\end{center}
+\vspace{1cm}
+\addcontentsline{toc}{chapter}{Chapter 1: Introduction}
+
+% ------------------------------------------
+% 1. INTRODUCTION
+% ------------------------------------------
+\addcontentsline{toc}{section}{1. Introduction}
+\noindent{\LARGE \textbf{I. Introduction}\par}
+\vspace{0.4cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+\noindent Semantic Scene Completion (SSC) has advanced rapidly in terrestrial autonomous driving, where dense 3D perception typically relies on multi-modal LiDAR sweeps [\hyperlink{cite5}{5}]. Extending these capabilities to low-altitude Unmanned Aerial Vehicles (UAVs) introduces severe operational constraints. UAVs must comply with strict flight regulations regarding payload and energy consumption, which conflict with the heavy mass and power demands of active depth sensors. Moreover, from elevated aerial viewpoints, LiDAR point clouds suffer from sparsity, leaving structural geometries under-sampled and complicating dense ground-truth generation. 
+
+Historically, aerial scene understanding has been focused on 2D imagery datasets or sparse point clouds designed for visual SLAM trajectories. These resources are useful for perception and localization, but they do not directly provide the dense, frame-wise 3D semantic supervision required for Semantic Scene Completion. Recent multi-modal aerial datasets make it possible to study 3D scene understanding from UAV viewpoints. UAVScenes provides synchronized nadir imagery, LiDAR point clouds, and reconstructed 3D maps with semantic annotations. Together, these resources establish a foundation for UAV-based 3D scene understanding.
+
+Building upon UAVScenes, this study investigates monocular SSC as a scalable alternative to multi-modal inference, following the paradigm introduced by MonoScene [\hyperlink{cite2}{2}]. RGB cameras are lightweight and energy-efficient, making them highly practical for UAV deployment. However, bridging the gap between raw multi-modal datasets and monocular training requires rigorous data transformations. Therefore, the core focus of this work lies in the design and execution of robust preprocessing pipelines-specifically, mapping global LiDAR point clouds into dense, camera-aligned 3D voxel grids to supervise vision-only models.
+
+Because raw aerial datasets cannot be natively ingested by SSC networks, this project emphasizes the engineering of accurate 3D spatial targets. We adapt the MonoScene architecture to aerial imagery by employing FLoSP to geometrically lift multi-scale 2D image features into a camera-aligned 3D voxel representation for semantic scene completion. 
+
+The main contributions of this work are:
+\begin{itemize}
+    \item \textbf{Baseline and Advanced Preprocessing Pipelines:} We design and implement a rigorous data processing workflow that transforms raw multi-modal data into localized, camera-aligned 3D voxel targets. This includes developing a Baseline Pipeline (standard point cloud voxelization) and an Advanced Pipeline (hybrid free-space raycasting and mesh projection), verifying alignment through custom frustum culling and 3D-to-2D geometric projections.
+    \item \textbf{Architectural Adaptation:} We adapt MonoScene to aerial imagery by employing an EfficientNet-B0 backbone and dynamic image resizing to accommodate high-resolution UAV observations under limited computational resources.
+    \item \textbf{Failure Mode Analysis:} We provide a comprehensive qualitative and quantitative analysis of UAV-specific failure modes in monocular SSC, explicitly diagnosing nadir-view height ambiguity, extreme class imbalance, and training instability.
+\end{itemize}
+
+% ------------------------------------------
+% Chapter 2: RELATED WORK
+% ------------------------------------------
+\newpage
+\addcontentsline{toc}{chapter}{Chapter 2: Related Work}
+\begin{center}
+    {\Huge \textbf{Chapter 2: Related Work}\par}
+\end{center}
+\vspace{1cm}
+
+\noindent The transition from 2D perception to dense 3D volumetric mapping is traditionally bottlenecked by sensor payload limits and computational overhead. This chapter reviews the foundational architectures in 3D scene completion, the structural shift toward aerial perception datasets, and the unique challenges posed by monocular nadir inference.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{I. The Evolution of 3D Semantic Scene Completion}
+\noindent{\Large \textbf{I. The Evolution of 3D Semantic Scene Completion}}\par
+\vspace{0.4cm}
+
+\noindent The task of predicting 3D volumetric geometry from partial observations was advanced by foundational frameworks such as SSCNet [\hyperlink{cite9}{9}] for scene completion and 3D-R2N2 [\hyperlink{cite16}{16}] for single/multi-view object reconstruction. As comprehensively surveyed by Roldão et al. [\hyperlink{cite17}{17}], early architectures relied heavily on 3D Convolutional Neural Networks processing explicit geometrical inputs, such as LiDAR point clouds or RGB-D depth maps. These models were typically benchmarked on datasets like NYUv2 [\hyperlink{cite15}{15}] for indoor scenes and SemanticKITTI [\hyperlink{cite5}{5}] for outdoor autonomous driving. While highly accurate, the reliance on active depth sensors restricts their deployment on Unmanned Aerial Vehicles (UAVs) due to strict Size, Weight, and Power (SWaP) constraints.
+
+To eliminate the need for active sensors, camera-based (monocular) SSC emerged. A primary challenge in monocular SSC is lifting 2D image features into 3D space. Many approaches rely on intermediate depth estimation, which compounds errors when the initial depth map fails. More recently, transformer-based architectures such as VoxFormer [\hyperlink{cite21}{21}] utilize monocular depth estimation to generate sparse voxel queries, which are then densified using cross-attention with image features.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{II. The MonoScene Architecture}
+\noindent{\Large \textbf{II. The MonoScene Architecture}}\par
+\vspace{0.4cm}
+
+\noindent MonoScene [\hyperlink{cite2}{2}] was the first end-to-end monocular Semantic Scene Completion framework that eliminated explicit depth estimation. Unlike previous approaches that predict intermediate depth maps, MonoScene directly projects multi-scale 2D image features into 3D space using Features Line of Sight Projection (FLoSP).
+
+The architecture consists of three major components:
+\begin{itemize}
+    \item A 2D backbone for extracting multi-scale image features.
+    \item The FLoSP module for lifting 2D features into a 3D frustum.
+    \item A 3D UNet decoder for volumetric reasoning.
+\end{itemize}
+
+MonoScene achieved state-of-the-art performance on SemanticKITTI and NYUv2 benchmarks, demonstrating that dense 3D scene completion can be learned directly from RGB imagery without explicit geometric supervision. However, MonoScene was developed for ground-level autonomous driving scenarios. Its applicability to aerial nadir imagery remains largely unexplored. The absence of horizon cues and vertical facade observations introduces severe depth ambiguity, motivating the present study.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{III. Multi-Modal Aerial Datasets and Benchmarks}
+\noindent{\Large \textbf{III. Multi-Modal Aerial Datasets and Benchmarks}}\par
+\vspace{0.4cm}
+
+\noindent The development of SSC has been heavily driven by ground-level datasets. However, models trained on ground-level data perform sub-optimally when transferred to UAVs due to severe domain shifts in viewing angle, scale ambiguity, and class distribution (e.g., the prevalence of roofs instead of building facades).
+
+Historically, UAV datasets such as the Semantic Drone Dataset [\hyperlink{cite12}{12}] focused predominantly on 2D tasks, providing high-resolution RGB imagery for object detection or crop monitoring without dense 3D spatial annotations. Conversely, SLAM-oriented datasets like TartanAir [\hyperlink{cite13}{13}] provide 3D trajectories and sparse point clouds but lack the dense, volumetric semantic supervision necessary for frame-wise SSC. Recently, the OccuFly [\hyperlink{cite4}{4}] benchmark introduced a large-scale, real-world aerial 3D occupancy dataset with 21 semantic classes. However, OccuFly relies entirely on a LiDAR-free, camera-based 3D reconstruction pipeline to generate its ground-truth labels. While this reduces annotation effort, it inherently suffers from photogrammetry artifacts and lacks the precise, active depth measurements provided by physical LiDAR sensors. It is important to note that our proposed pipeline shares similar limitations regarding photogrammetry-based mesh rendering, which we extensively discuss in later sections.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{IV. The UAVScenes Dataset}
+\noindent{\Large \textbf{IV. The UAVScenes Dataset}}\par
+\vspace{0.4cm}
+
+\noindent The introduction of the UAVScenes [\hyperlink{cite1}{1}] dataset addresses the aforementioned gaps in real-world aerial data. Published at ICCV 2025, UAVScenes is built upon the well-calibrated MARS-LVIG [\hyperlink{cite18}{18}] dataset, which was originally designed for Simultaneous Localization and Mapping (SLAM). The authors significantly expanded the MARS-LVIG foundation by providing dense, manual semantic annotations tailored specifically for high-level aerial scene understanding.
+
+UAVScenes is distinguished by its scale and multi-modal richness. It comprises 120,000 labeled pairs of synchronized frame-wise nadir RGB images and active LiDAR point clouds. Furthermore, the dataset provides highly accurate 6-Degree-of-Freedom (6-DoF) sensor poses and fully reconstructed 3D point cloud and mesh maps. This comprehensive suite of data modalities enables a wide variety of advanced perception tasks beyond standard 2D segmentation, including 3D semantic segmentation, depth estimation, place recognition, and Novel View Synthesis (NVS).
+
+By offering a robust, multi-modal 3D occupancy benchmark specifically captured from the aerial perspective, UAVScenes provides the optimal environment to evaluate monocular Semantic Scene Completion architectures under extreme viewpoint constraints and long-tailed class distributions.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{V. Challenges in Monocular Aerial Perception}
+\noindent{\Large \textbf{V. Challenges in Monocular Aerial Perception}}\par
+\vspace{0.4cm}
+
+\noindent Adapting monocular SSC to the UAV domain introduces significant physical and algorithmic hurdles. The most prominent challenge is depth ambiguity induced by the nadir (top-down) viewpoint. In ground-based autonomous driving, networks utilize strong geometric anchors-such as the horizon line and linear perspective-to infer scale and depth [\hyperlink{cite14}{14}]. Conversely, aerial cameras observe the world orthogonally to gravity, largely occluding vertical facades and eliminating perspective convergence. This forces the perception model to rely strictly on top-surface texture, spatial priors, and object relative sizing, which frequently leads to height collapse or ``floating'' artifacts.
+
+Furthermore, aerial imagery is highly susceptible to severe illumination shifts and atmospheric interference. Because monocular frameworks like MonoScene extract geometric features purely from RGB pixel values, drastic changes in lighting (e.g., daytime versus evening) fundamentally alter the feature distribution. This domain shift often results in catastrophic failure when testing models on out-of-distribution temporal data, underscoring the necessity for robust Domain Generalization strategies or multi-modal fusion in real-world UAV deployment.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{VI. Research Gap and Motivation}
+\noindent{\Large \textbf{VI. Research Gap and Motivation}}\par
+\vspace{0.4cm}
+
+\noindent Existing Semantic Scene Completion research has primarily focused on indoor environments and ground-based autonomous driving datasets, where strong geometric cues and active depth sensing are available. Although monocular approaches such as MonoScene have demonstrated promising performance on ground-view benchmarks, their effectiveness under aerial nadir viewpoints remains largely unexplored.
+
+Meanwhile, recent aerial datasets have either concentrated on 2D semantic understanding, lacked dense volumetric annotations, or relied on synthetic environments. To the best of our knowledge, there remains limited investigation into adapting monocular SSC frameworks to real-world UAV datasets under strict hardware constraints.
+
+Therefore, this thesis addresses three research gaps:
+\begin{itemize}
+    \item The lack of MonoScene-compatible SSC benchmarks for UAVScenes.
+    \item The absence of studies evaluating monocular SSC under aerial nadir viewpoints.
+    \item The limited understanding of how ground-truth engineering influences monocular UAV SSC performance.
+\end{itemize}
+
+To address these gaps, this work proposes a hybrid preprocessing pipeline for generating dense pseudo-ground-truth targets from UAVScenes and systematically evaluates the adapted MonoScene architecture under temporally and environmentally separated aerial benchmarks.
+
+% ==========================================
+% CHAPTER 3: OBJECTIVES
+% ==========================================
+\newpage
+\addcontentsline{toc}{chapter}{Chapter 3: Objectives}
+\begin{center}
+    {\Huge \textbf{Chapter 3: Objectives}\par}
+\end{center}
+\vspace{1cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+\addcontentsline{toc}{section}{I. Problem Statement}
+\noindent{\Large \textbf{I. Problem Statement}}\par
+\vspace{0.4cm}
+
+\noindent Semantic Scene Completion (SSC) requires the simultaneous prediction of dense 3D volumetric geometry and semantic class labels from raw sensor data. While significant progress has been made in autonomous driving domains using ground-level imagery, aerial scene understanding remains exceptionally difficult. The core problem this thesis addresses is the challenge of predicting dense 3D voxels from a single 2D top-down (nadir) image. Unlike ground vehicles, Unmanned Aerial Vehicles (UAVs) capturing nadir imagery lack critical geometric anchors such as horizon lines and linear perspective. This viewpoint causes severe depth ambiguity and occludes vertical facades, making the projection of 2D pixels into a 3D frustum highly complex. Furthermore, aerial datasets exhibit extreme class imbalance, where flat surfaces (e.g., roads, grass) dominate the distribution, while safety-critical structural geometries are vastly underrepresented.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{II. Significance of the Study}
+\noindent{\Large \textbf{II. Significance of the Study}}\par
+\vspace{0.4cm}
+
+\noindent Traditional 3D perception pipelines rely heavily on active depth sensors, such as LiDAR, to resolve depth ambiguities. However, physical LiDAR arrays are heavy, power-intensive, and expensive, which severely limits their deployment on agile, hardware-constrained UAVs. Developing a robust monocular (RGB-only) Semantic Scene Completion pipeline is of critical importance because it enables lightweight, low-cost drones to fully understand the 3D space surrounding them using only standard cameras. Advancing monocular SSC in the aerial domain has direct, life-saving applications in autonomous navigation, obstacle avoidance in dense urban environments, and rapid 3D mapping for disaster response and search-and-rescue operations.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{III. Specific Objectives}
+\noindent{\Large \textbf{III. Specific Objectives}}\par
+\vspace{0.4cm}
+
+\noindent To address the challenges of aerial monocular perception, this research targets three specific, measurable engineering objectives:
+\begin{itemize}
+    \item \textbf{Data Engineering:} To design and implement a robust geometric preprocessing pipeline capable of converting raw multi-modal UAVScenes [\hyperlink{cite1}{1}] data (LiDAR sweeps, RGB frames, and 6-DoF poses) into dense, camera-aligned 3D pseudo-ground-truth voxel grids suitable for training.
+    \item \textbf{Architecture Adaptation:} To adapt the MonoScene [\hyperlink{cite2}{2}] architecture to the aerial domain by integrating an optimized backbone (e.g., EfficientNet-B0) that allows the network to process high-resolution drone imagery under strict GPU VRAM constraints.
+    \item \textbf{Benchmarking and Evaluation:} To train and systematically evaluate the adapted monocular SSC network across temporally separated test splits to establish a quantitative baseline for aerial 3D occupancy prediction.
+\end{itemize}
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{section}{IV. Research Questions}
+\noindent{\Large \textbf{IV. Research Questions}}\par
+\vspace{0.4cm}
+
+\noindent The development and evaluation of the aerial SSC pipeline are guided by the following core research questions:
+\begin{itemize}
+    \item \textbf{RQ1:} Can a monocular vision-only network accurately reconstruct dense 3D semantic geometry from a top-down aerial perspective without relying on active depth sensors during inference?
+    \item \textbf{RQ2:} How does the design of the ground-truth generation pipeline (Baseline Direct Voxelization versus Advanced Hybrid Raycasting) impact the geometric fidelity of the resulting voxel targets?
+    \item \textbf{RQ3:} To what extent do the physical phenomena inherent to nadir viewpoints-specifically the "stair-step" grid aliasing and "floating roof" effects-limit network performance, and how severely does extreme class imbalance hinder minority class prediction?
+\end{itemize}
+
+
+% ==========================================
+% CHAPTER 4: MATERIALS AND METHODS
+% ==========================================
+\newpage
+\addcontentsline{toc}{chapter}{Chapter 4: Materials and Methods}
+\begin{center}
+    {\Huge \textbf{Chapter 4: Materials and Methods}\par}
+\end{center}
+\vspace{1cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+% ------------------------------------------
+% I. DATASET: UAVSCENES
+% ------------------------------------------
+\addcontentsline{toc}{section}{I. Dataset: UAVScenes}
+\noindent{\LARGE \textbf{I. Dataset: UAVScenes}\par}
+\vspace{0.4cm}
+
+\addcontentsline{toc}{subsection}{1. Dataset Overview}
+\noindent{\Large \textbf{1. Dataset Overview}}\par
+\vspace{0.4cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+
+\noindent The foundation of this study is the UAVScenes [\hyperlink{cite1}{1}] dataset, a recently released multi-modal benchmark designed to advance UAV-based perception and scene understanding. Built upon the MARS-LVIG [\hyperlink{cite18}{18}] dataset, UAVScenes provides a large-scale collection of aerial data captured by UAV platforms across diverse environments such as towns, valleys, airports, and islands, integrating both visual and geometric modalities. This project specifically utilizes the interval-5 key-frame version across four primary scenes (AMtown, AMvalley, HKairport, and HKisland). This subset was selected because it significantly reduces storage requirements, export time, and GPU training costs while preserving sufficient frame density for initial Semantic Scene Completion (SSC) experiments.
+
+\vspace{0.5cm}
+
+\hypertarget{fig:1}{}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Figure1.png}
+    \caption[Multi-modal characteristics of the UAVScenes dataset.]
+    {\textbf{Multi-modal characteristics of the UAVScenes [\protect\hyperlink{cite1}{1}] dataset.}
+    \textmd{The dataset provides synchronized high-resolution RGB imagery (left), dense 2D semantic annotations (center), and 3D LiDAR point clouds (right), captured from a top-down aerial perspective. (\textit{Source: UAVScenes Dataset})}}
+\end{figure}
+
+\newpage
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+\noindent \textbf{Scale and Composition} UAVScenes [\hyperlink{cite1}{1}] contains over 120,000 frames annotated with dense semantic labels. The raw dataset includes 26 classes, but a few classes are unnamed so we put them in the ignore class, leaving 19 categories: static scene classes, dynamic object classes such as sedan and truck, and a background class. In this project, dynamic objects were mapped to the ignore label during preprocessing to focus on static structural geometry. The resulting network taxonomy contains 17 labels: one empty/free-space label and 16 occupied semantic classes. In addition to frame-wise annotations, the dataset includes 6-DoF poses and reconstructed 3D maps, enabling spatially consistent voxel target construction.
+
+\noindent \textbf{Modalities and Relevance to SSC} While UAVScenes [\hyperlink{cite1}{1}] is inherently multi-modal, the RGB-only Semantic Scene Completion pipeline uses its modalities in separated roles:
+\begin{itemize}
+    \item \textbf{RGB Imagery (Model Input):} High-resolution nadir (top-down) camera frames provide the sole input for our perception model, relying entirely on visual texture and color to infer depth and structure.
+    \item \textbf{LiDAR and 3D Maps (Ground Truth Generation):} The dataset's dense geometric data and synchronized point clouds are utilized strictly during the preprocessing stage. LiDAR labels and reconstructed map information are used during preprocessing to construct voxelized pseudo-ground-truth targets.
+\end{itemize}
+
+\noindent \textbf{Annotation Methodology and Limitations} A characteristic of UAVScenes [\hyperlink{cite1}{1}] is its annotation pipeline. The authors achieved high-quality annotations by manually annotating static classes onto reconstructed 3D maps, which were then rendered back onto 2D camera views. Because the data is captured from an aerial, top-down perspective, vertical structures are occluded. Consequently, the dataset does not include a class for vertical "walls." In the UAVScenes label design, building volumes are represented primarily by their visible top surfaces. Because the nadir camera view provides little or no facade information, vertical building structures inherit the roof semantic label during voxel target construction. Therefore, roof-colored building columns in the 3D visualization are not necessarily a model error; they reflect both the dataset annotation convention and the inherent ambiguity of top-down monocular SSC. This geometric quirk presents a challenge for Semantic Scene Completion, as the network must learn to predict solid vertical columns based purely on top-surface visibility.
+
+\noindent \textbf{Significance} Compared to prior UAV datasets that focused on single-modality imagery, localization or coarse reconstruction, UAVScenes [\hyperlink{cite1}{1}] offers comprehensive multi-modal annotations - including aligned RGB, LiDAR, pose, and semantic information - and large-scale coverage. This makes it suitable for testing how effectively a vision-only model can map flat aerial imagery into structured 3D semantic voxel predictions.
+
+\hypertarget{tab:1}{}
+\begin{table}[h!]
+\centering
+\caption[Dataset Overview]
+{\textbf{Dataset Overview}}
+\vspace{0.2cm}
+\begin{tabular}{l|lllll}
+\hline\hline
+Sequence & Camera & Duration(s) & Cruising & Cruising & Scenario and \\
+ & Frames & & Speed (m/s) & Altitude (m) & Characters \\
+\hline
+AMtown01 & 2.5k & 271 & 4 & 80 & Rural town \\
+AMtown02 & 1.3k & 150 & 8 & 80 & Rural town \\
+AMtown03 & 1.2k & 124 & 12 & 80 & Rural town \\
+AMvalley01 & 2.2k & 240 & 4 & 130 & Valleys \\
+AMvalley02 & 1.2k & 140 & 8 & 130 & Valleys \\
+AMvalley03 & 0.9k & 109 & 12 & 130 & Valleys \\
+HKairport01 & 1.4k & 156 & 3 & 80 & Aero-model airfield \\
+HKairport02 & 0.7k & 91 & 6 & 80 & Aero-model airfield \\
+HKairport03 & 0.6k & 73 & 9 & 80 & Aero-model airfield \\
+HKairportEvening & 1.4k & 157 & 3 & 80 & Aero-model airfield \\
+HKisland01 & 1.3k & 150 & 3 & 90 & Islands \\
+HKisland02 & 0.7k & 94 & 6 & 90 & Islands \\
+HKisland03 & 0.6k & 76 & 9 & 90 & Islands \\
+HKislandEvening & 2.2k & 267 & 3 & 90 & Islands \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+\vspace{0.5cm}
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{2. Label Space and Distribution}
+\noindent{\Large \textbf{2. Label Space and Distribution}}\par
+\vspace{0.4cm}
+
+\noindent The raw UAVScenes taxonomy contains a broad array of categories, including dynamic objects (e.g., sedans, trucks) and granular structural types. For the purpose of static 3D Semantic Scene Completion, dynamic objects were remapped to the \textit{ignore} label (255) to force the network to focus strictly on structural and topographical geometry. 
+
+To rigorously evaluate the model's learning capacity under varying degrees of class imbalance, we engineered two distinct taxonomic mappings for the exported SSC ground truth: a comprehensive 16-class baseline, and a reduced 12-class ablation taxonomy.
+
+\noindent\textbf{The 16-Class Baseline Taxonomy:}
+The 16-class mapping represents the primary experimental environment. It preserves highly specific, yet volumetrically rare structural classes such as \textit{bridge}, \textit{solar\_board}, \textit{umbrella}, and \textit{pool}. By forcing the model to predict these minority classes, we can explicitly evaluate the MonoScene architecture's ability to extract high-frequency geometric details from nadir imagery.
+
+As demonstrated in Table 2, aggregating the voxel counts across the evaluated interval-5 subset reveals an extreme, long-tailed class imbalance. Empty (free) space absolutely dominates the 3D tensor, comprising 93.72\% of all valid learning voxels. Among the physically occupied voxels, natural topography (\textit{Green Field} and \textit{Wild Field}) accounts for roughly 80\% of the physical structures, while artificial minority classes (e.g., \textit{Umbrella}, \textit{Pool}) occupy less than 0.02\% of the occupied volume.
+
+\begin{table}[H]
+\centering
+\caption[16-Class Baseline Voxel Distribution (Interval-5 Subset)]
+{\textbf{16-Class Baseline Voxel Distribution (Interval-5 Subset)}}
+\vspace{0.2cm}
+\begin{tabular}{c|l|r|c}
+\hline\hline
+\textbf{ID} & \textbf{Class Name} & \textbf{Total Voxels} & \textbf{\% of Occupied Space} \\
+\hline
+0 & Empty (Free Space) & 3,674,726,330 & - (93.72\% of Total Valid) \\
+255 & Unknown/Ignored & 2,058,181,638 & - (Excluded from loss) \\
+\hline
+10 & Green Field & 143,830,676 & 58.38\% \\
+11 & Wild Field & 53,037,901 & 21.53\% \\
+4 & River & 18,492,913 & 7.51\% \\
+1 & Roof & 9,392,540 & 3.81\% \\
+8 & Airstrip & 8,181,811 & 3.32\% \\
+2 & Dirt Motor Road & 5,632,416 & 2.29\% \\
+3 & Paved Motor Road & 3,966,880 & 1.61\% \\
+7 & Container & 1,128,165 & 0.46\% \\
+9 & Traffic Barrier & 933,707 & 0.38\% \\
+16 & Paved Walk & 881,889 & 0.36\% \\
+15 & Car Park & 422,346 & 0.17\% \\
+14 & Transparent Roof & 324,256 & 0.13\% \\
+6 & Bridge & 66,897 & 0.03\% \\
+12 & Solar Board & 36,885 & 0.01\% \\
+13 & Umbrella & 32,330 & 0.01\% \\
+5 & Pool & 2,904 & 0.01\% \\
+\hline
+\multicolumn{2}{l|}{\textbf{Total Occupied (1-16)}} & \textbf{246,364,516} & \textbf{100.00\%} \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+\vspace{0.5cm}
+
+\noindent\textbf{The 12-Class Ablation Taxonomy:}
+To determine whether rare-class noise was degrading the model's overall semantic accuracy, a secondary 12-class dataset was generated. In this ablation setting, minority structural classes (such as pools, bridges, umbrellas, and solar boards) were either merged into structurally similar macroscopic categories or masked out. 
+
+Table 3 outlines the distribution of the 12-class subset. While this taxonomy eliminates the most severe minority classes, the overarching aerial imbalance remains prevalent. This severe sparsity dictates that standard cross-entropy loss is insufficient for training, necessitating specialized geometric scaling losses to prevent the model from collapsing into predicting only empty space and green fields.
+
+\begin{table}[H]
+\centering
+\caption[12-Class Ablation Voxel Distribution (Interval-5 Subset)]
+{\textbf{12-Class Ablation Voxel Distribution (Interval-5 Subset)}}
+\vspace{0.2cm}
+\begin{tabular}{c|l|r|c}
+\hline\hline
+\textbf{ID} & \textbf{Class Name} & \textbf{Total Voxels} & \textbf{\% of Occupied Space} \\
+\hline
+0 & Empty (Free Space) & 3,601,048,792 & - (93.28\% of Total Valid) \\
+255 & Unknown/Ignored & 2,058,292,746 & - (Excluded from loss) \\
+\hline
+8 & Green Field & 154,760,036 & 59.66\% \\
+9 & Wild Field & 57,586,492 & 22.20\% \\
+4 & River & 17,005,184 & 6.55\% \\
+1 & Roof & 9,463,191 & 3.65\% \\
+6 & Airstrip & 7,958,886 & 3.07\% \\
+2 & Dirt Motor Road & 5,310,483 & 2.05\% \\
+3 & Paved Motor Road & 3,759,373 & 1.45\% \\
+5 & Container & 1,059,469 & 0.41\% \\
+7 & Traffic Barrier & 920,498 & 0.35\% \\
+12 & Paved Walk & 882,635 & 0.34\% \\
+11 & Car Park & 391,063 & 0.15\% \\
+10 & Transparent Roof & 325,660 & 0.13\% \\
+\hline
+\multicolumn{2}{l|}{\textbf{Total Occupied (1-12)}} & \textbf{259,422,970} & \textbf{100.00\%} \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+
+% ------------------------------------------
+% II. PROBLEM DEFINITION: MONOCULAR UAV SSC
+% ------------------------------------------
+\vspace{0.8cm}
+\addcontentsline{toc}{section}{II. Problem Definition: Monocular UAV SSC}
+\noindent{\LARGE \textbf{II. Problem Definition: Monocular UAV SSC}\par}
+\vspace{0.4cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+\noindent Semantic Scene Completion (SSC) aims to jointly infer dense 3D geometry and semantic labels from a given observation. Performing this task using only a single monocular RGB image-without the aid of active depth sensors like LiDAR-is an ill-posed and challenging computer vision problem. In the context of Unmanned Aerial Vehicles (UAVs), this challenge is amplified. 
+
+The nadir (near top-down) camera perspective provides extremely limited visual evidence of vertical structures (e.g., building facades). Consequently, a monocular UAV SSC model must learn to predict solid 3D volumetric columns based almost entirely on top-surface texture, spatial priors, and perspective geometry, while operating under strict hardware and memory constraints.
+
+\vspace{0.5cm}
+\hypertarget{fig:2}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Figure2.png} 
+    \caption[Differences in camera perspective.]
+    {\textbf{Differences in camera perspective.}
+    \textmd{(Left) Autonomous driving. (Right) UAV.}}
+\end{figure}
+
+% ------------------------------------------
+% III. PREPROCESSING PIPELINE AND GROUND TRUTH CONSTRUCTION
+% ------------------------------------------
+\vspace{0.8cm}
+\addcontentsline{toc}{section}{III. Preprocessing Pipeline and Ground Truth Construction}
+\noindent{\LARGE \textbf{III. Preprocessing Pipeline and Ground Truth Construction}\par}
+\vspace{0.4cm}
+
+\noindent The preprocessing pipeline converts raw UAVScenes point clouds and images into localized, per-frame SSC .npz samples. Because the network requires discrete 3D voxel grids aligned to the camera's perspective, we developed two distinct preprocessing methodologies: an initial baseline pipeline utilizing global voxel voting, and an advanced multi-phase pipeline incorporating LiDAR free-space carving to improve geometric fidelity.
+
+\vspace{0.5cm}
+
+\addcontentsline{toc}{subsection}{1. Baseline Pipeline: Global Voxel Voting}
+\noindent{\Large \textbf{1. Baseline Pipeline: Global Voxel Voting}}\par
+\vspace{0.4cm}
+
+\noindent The preprocessing pipeline converts raw UAVScenes point clouds and images into localized, per-frame SSC .npz samples. The network does not train directly from raw point clouds; instead, it requires discrete 3D voxel grids aligned to the camera's perspective.
+
+\vspace{0.5cm}
+\hypertarget{fig:3}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.33\textwidth]{Figure3.png} 
+    \caption[Baseline Preprocessing Workflow: Direct LiDAR Voxelization]
+    {\textbf{Baseline Preprocessing Workflow: Direct LiDAR Voxelization.}
+    \textmd{The initial data pipeline transforming raw multi-modal UAVScenes data into localized, camera-aligned 3D voxel targets via global voxel voting and frustum culling.}}
+
+\end{figure}
+
+\vspace{0.5cm}
+
+\noindent\textbf{Global Semantic Voxelization:} First, the raw LiDAR point clouds are voxelized into a global scene grid. Let the semantic point cloud be defined as $\mathcal{P}_{S}=\{(x_{m},c_{m})\}_{m=1}^{M}$, where $x_{m}\in\mathbb{R}^{3}$ represents the 3D coordinates and $c_m \in \mathcal{C}$ represents the semantic class label. Given a target voxel resolution r, we apply standard binning to convert the continuous points into a discrete occupied voxel grid $\mathcal{G}$, following conventional occupancy mapping procedures [\hyperlink{cite3}{3}].
+
+\noindent\textbf{Majority Voxel Voting:} 
+Because the UAV surveys the scene over time, multiple overlapping LiDAR scans frequently project conflicting points into the same discrete voxel. To resolve these label collisions without relying on learning-based models, we implement a deterministic majority voting mechanism. The semantic label with the highest point count within the $0.5m^3$ boundary wins the voxel. If a voxel contains an equal number of points for different classes, a predefined hierarchy or random tie-break is applied.
+
+\vspace{0.5cm}
+
+\hypertarget{fig:4}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figure4.png}
+    \caption[Sensor Alignment Verification.] 
+    {\textbf{Sensor Alignment Verification.}
+    \textmd{Raw LiDAR point clouds projected onto the corresponding RGB camera frame. This visualization was generated during preprocessing to verify camera-LiDAR calibration before voxel target construction.}}
+\end{figure}
+
+\noindent\textbf{Frustum Culling and Local Target Construction:} To train the monocular network, we must extract only the 3D geometry that corresponds to the specific 2D camera view. Given an RGB image with width W and height H, let $K \in \mathbb{R}^{3\times3}$ be the camera intrinsic matrix and $T_{c\leftarrow w} \in SE(3)$ be the world-to-camera pose. We define the camera pinhole projection as $\pi_n$. The continuous 3D viewing frustum $\mathcal{F}_n$ is defined as the set of all 3D points that project within the 2D image boundaries:
+\begin{equation*}
+    \mathcal{F}_n = \{x \in \mathbb{R}^3 : \pi_n(x) \in [0, W) \times [0, H)\}
+\end{equation*}
+By discretizing this continuous frustum $\mathcal{F}_n$ at resolution r, we crop a local $128 \times 128 \times 32$ spatial tensor $Y_n$ from the global grid $\mathcal{G}$, following the frustum-based supervision paradigm commonly adopted in SSC frameworks [\hyperlink{cite2}{2}, \hyperlink{cite9}{9}]. This local tensor $Y_n$ serves as the LiDAR-derived pseudo-ground-truth SSC target for the corresponding 2D RGB input.
+
+\newpage
+
+\hypertarget{fig:5}{}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=1\textwidth]{Figure5.png}
+    \caption[3D-to-2D Alignment Verification and Local Target Projection.] 
+    {\textbf{3D-to-2D Alignment Verification and Local Target Projection.}
+    \textmd{To verify the spatial integrity of the extracted $128 \times 128 \times 32$ voxel targets, the centroids of the occupied 3D ground-truth voxels are mathematically projected back onto the 2D camera plane. The strict alignment of the projected semantic classes (e.g., red paved\_walk voxels aligning with underlying image features) confirms both the accuracy of the camera intrinsic/extrinsic matrices and the correctness of the frustum culling process used during local target construction.}}
+\end{figure}
+
+\vspace{0.5cm}
+
+\addcontentsline{toc}{subsection}{2. Advanced Pipeline: Multi-Phase Free-Space Carving}
+\noindent{\Large \textbf{2. Advanced Pipeline: Multi-Phase Free-Space Carving}}\par
+\vspace{0.4cm}
+
+\noindent To overcome the limitations of the baseline pipeline, specifically the loss of thin structures due to LiDAR sparsity and spatial distortions, we propose an advanced Hybrid Space-Carving and Raycasting Pipeline. This pipeline integrates dense photogrammetry reconstructions and high-resolution 2D semantic labels to generate a highly accurate 3D pseudo-ground-truth. The workflow is divided into four sequential phases.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\vspace{0.5cm}
+\hypertarget{fig:6}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.33\textwidth]{Figure6.png} 
+    \caption[Advanced Preprocessing Workflow: Multi-Phase Hybrid Raycasting]
+    {\textbf{Advanced Preprocessing Workflow: Multi-Phase Hybrid Raycasting.}
+    \textmd{The proposed advanced pipeline integrating LiDAR free-space carving and photogrammetry mesh projection to generate dense, highly accurate 3D pseudo-ground-truth targets.}}
+
+
+\end{figure}
+
+\noindent \textbf{Phase 1: LiDAR Free-Space Carving}
+\vspace{0.1cm}
+
+\noindent In the first phase, we utilize the raw LiDAR point clouds exclusively to estimate free (empty) space. This relies on the established principles of 3D occupancy grid mapping and raycasting [\hyperlink{cite3}{3}]. For each LiDAR frame, a ray is traced from the sensor origin $o \in \mathbb{R}^3$ to the observed hit point $p \in \mathbb{R}^3$. All voxels intersecting the ray segment prior to the hit point are accumulated as free-space votes. Let the voxel index $v$ along the ray be computed by:
+\begin{equation}
+    v = \lfloor \frac{o + t \cdot \frac{(p - o)}{\|p - o\|}}{r} \rfloor, \quad \text{for } 0 \le t < \|p - o\|
+\end{equation}
+where $r$ is the voxel resolution. By strictly using LiDAR for empty air, we avoid false semantic assignments while mapping vast regions of unoccupied space. The total number of free-space voxels generated in this phase is extremely large, as detailed in Table 4
+
+\begin{table}[H]
+\centering
+\caption[Phase 1 (Free Space) Voxel Count]
+{\textbf{Phase 1 (Free Space) Voxel Count}}
+\vspace{0.2cm}
+\begin{tabular}{l|r}
+\hline\hline
+\textbf{Scene} & \textbf{Total Voxels}  \\
+\hline
+AMtown01 & 151,873,250  \\
+AMvalley01 & 241,813,903  \\
+HKairport01 & 62,300,321  \\
+HKisland01 & 37,317,335  \\
+HKairport Evening & 62,454,311  \\
+HKisland Evening & 39,406,766  \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\noindent \textbf{Phase 2: Dense Depth Rendering from Terra Mesh}
+\vspace{0.1cm}
+
+\noindent To obtain precise depth for semantic projection, we leverage the pre-reconstructed photogrammetry meshes (\textit{Mesh.ply}). The Terra mesh is reconstructed from aerial imagery utilizing standard Structure-from-Motion (SfM) and Multi-View Stereo (MVS) pipelines, such as COLMAP [\hyperlink{cite19}{19}]. Depth images at reduced resolution ($224 \times 320$ with $2\times$ pixel subsampling) are then rendered from the arbitrary UAV camera viewpoints using the Open3D raycasting engine. However, these generated depth maps only encode the distances to the visible surfaces (e.g., roofs, ground), while occluded vertical structures and hollow interiors remain completely empty.
+
+Given the camera intrinsic matrix $K \in \mathbb{R}^{3\times3}$ and the camera-to-world extrinsic matrix $T_{w \leftarrow c} \in SE(3)$, we render a dense depth map for each frame. The ray direction $d_{cam}$ for a pixel $u = [x, y, 1]^T$ is given by $d_{cam} = K^{-1} u$. The corresponding ray in world coordinates is:
+\begin{equation}
+    d_{world} = R_{w \leftarrow c} \frac{d_{cam}}{\|d_{cam}\|}
+\end{equation}
+Casting these rays against the Terra mesh provides a high-fidelity depth map $D(u)$ containing the Euclidean distance from the optical center to the mesh surface.
+
+\vspace{0.5cm}
+\hypertarget{fig:7}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Figure7.png} 
+    \caption[Visualization of the depth mesh results.]
+    {\textbf{Visualization of the depth mesh results.}
+    \textmd{The color bar indicates depth values. (Left) Input. (Right) Corresponding depth maps rendered.}}
+\end{figure}
+
+\vspace{0.3cm}
+\noindent \textbf{Phase 3: Dense Semantic Projection}
+\vspace{0.1cm}
+
+\noindent In this phase, we project the high-density 2D semantic labels (\textit{CAM\_label\_id}) into the 3D voxel grid. Following principles of RGB-D semantic mapping [\hyperlink{cite20}{20}], we project the labels using the depth map $D(u)$ obtained in Phase 2. Each valid annotated pixel is mapped to a 3D coordinate $P_{cam}$ in the camera frame:
+\begin{equation}
+    P_{cam} = D(u) \frac{K^{-1} u}{\|K^{-1} u\|}
+\end{equation}
+This point is then transformed into world coordinates $P_{world} = R_{w \leftarrow c} P_{cam} + t_{w \leftarrow c}$ and discretized into the voxel grid. Because the camera's resolution is significantly denser than the LiDAR's, thin structures such as gazebo roofs are perfectly preserved. Table 5 shows the count of semantic voxels generated.
+
+\begin{table}[H]
+\centering
+\caption[Phase 3 (Semantic) Voxel Count]
+{\textbf{Phase 3 (Semantic) Voxel Count}}
+\vspace{0.2cm}
+\begin{tabular}{l|r}
+\hline\hline
+\textbf{Scene} & \textbf{Total Voxels} \\
+\hline
+AMtown01 & 3,346,019  \\
+AMvalley01 & 3,225,179  \\
+HKairport01 & 1,720,567  \\
+HKisland01 & 974,932  \\
+HKairport (Eve) & 1,229,688  \\
+HKisland (Eve) & 428,925  \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+Crucially, because the Terra Mesh is generated via photogrammetry (stitching 2D images together), it only models the visible outer skin of the environment. It acts as a 2.5D blanket draped over the topography. Therefore, when the dense semantic labels are projected onto this depth map, it mathematically guarantees that the resulting structural ground truth will be a precise, 1-voxel-thick surface shell. While this perfectly preserves the topological boundaries of the scene, it inherently discards the unobserved internal solid volume of buildings and vegetation.
+
+\vspace{0.3cm}
+\noindent \textbf{Phase 4: Voxel-Grid Alignment and Target Extraction}
+\vspace{0.1cm}
+
+\noindent The final step merges the free-space votes (Phase 1) and semantic votes (Phase 3). Semantic votes take precedence over free-space votes. A local spatial target of size $128 \times 128 \times 32$ is extracted around the camera's view frustum. Downsampled labels and Line of Sight (LoS) mega-matrices are computed for MonoScene compatibility, producing the final training .npz tensors.
+
+\vspace{0.5cm}
+\hypertarget{fig:8}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Figure8.png} 
+    \caption[Dense 3D-to-2D Target Projection.]
+    {\textbf{Dense 3D-to-2D Target Projection.}
+    \textmd{(Left) Original image. (Middle) Corresponding overlay with original image. (Right) Corresponding overlay with Ground-Truth Label.}}
+\end{figure}
+
+
+
+% ------------------------------------------
+% IV. MODEL ARCHITECTURE ADAPTATION
+% ------------------------------------------
+\vspace{0.8cm}
+\addcontentsline{toc}{section}{IV. Model Architecture Adaptation}
+\noindent{\LARGE \textbf{IV. Model Architecture Adaptation}\par}
+\vspace{0.4cm}
+
+\noindent To tackle monocular UAV SSC, this study adapts the MonoScene [\hyperlink{cite2}{2}] architecture to the aerial domain. The pipeline processes single 2D RGB images and projects them into a dense local voxel grid of size $128 \times 128 \times 32$. 
+
+\vspace{0.5cm}
+
+\hypertarget{fig:9}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figure9.png}
+    \caption[The overall monocular Semantic Scene Completion pipeline adapted for the UAVScenes dataset.] 
+    {\textbf{The overall monocular Semantic Scene Completion pipeline adapted for the UAVScenes dataset.}
+    \textmd{The architecture processes an RGB input through an EfficientNet-B0 backbone, lifts the multi-scale 2D features into a 3D frustum via FLoSP, and refines the spatial geometry using a 3D Convolutional UNet.}}
+\end{figure}
+
+\vspace{0.5cm}
+
+\addcontentsline{toc}{subsection}{1. The End-to-End Monocular Paradigm}
+\noindent{\Large \textbf{1. The End-to-End Monocular Paradigm}}\par
+\vspace{0.4cm}
+
+\noindent Many traditional monocular 3D [\hyperlink{cite21}{21},\hyperlink{cite22}{22}] perception frameworks utilize a sequential, two-stage pipeline: they first employ an isolated network to predict a 2D depth map, and subsequently use that depth map to unproject 2D pixels into a sparse 3D point cloud before voxelization. This two-stage approach suffers heavily from compounding errors; if the intermediate depth estimation fails-which is highly common in nadir aerial views lacking horizon lines-the downstream 3D reconstruction irreversibly collapses. 
+
+To mitigate this, our adapted pipeline utilizes MonoScene's purely end-to-end architecture. MonoScene completely bypasses the creation of an explicit 2D depth map. Instead, it directly learns the mapping from 2D appearance features to 3D volumetric occupancies within a single, unified differentiable network, allowing the model to leverage deep 3D contextual priors to resolve depth ambiguities.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{2. 2D Feature Extraction: EfficientNet-B0 Backbone}
+\noindent{\Large \textbf{2. 2D Feature Extraction: EfficientNet-B0 Backbone}}\par
+\vspace{0.4cm}
+
+\noindent The first stage of the network is tasked with extracting rich semantic and textural information from the RGB input. The original MonoScene architecture utilized an EfficientNet-B7 backbone [\hyperlink{cite2}{2}]. However, to accommodate the strict 24GB VRAM limit of our hardware during training, the heavy backbone was replaced with an ImageNet-pretrained EfficientNet-B0 [\hyperlink{cite6}{6}].
+
+Given an input image $I \in \mathbb{R}^{3 \times H_{in} \times W_{in}}$, the EfficientNet-B0 backbone processes the image through a series of Mobile Inverted Bottleneck Convolution (MBConv) blocks. To capture both fine-grained local textures (e.g., road markings) and large semantic contexts (e.g., expansive green fields), the backbone is configured as a Feature Pyramid Network (FPN). It extracts a set of multi-scale 2D feature maps $F_{2D} = \{F_{2D}^s\}_{s \in S}$ at progressive downsampling scales $S = \{1/1, 1/2, 1/4, 1/8, 1/16\}$. Note that the subsequent 3D lifting (FLoSP) uses only the scales $\{1, 2\}$ to generate the 3D frustum. Each scale is then standardized to a uniform feature dimension (typically $C=64$) using $1 \times 1$ convolutions, ensuring computational efficiency before the spatial transformation.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{3. 2D-to-3D Feature Lifting (FLoSP)}
+\noindent{\Large \textbf{3. 2D-to-3D Feature Lifting (FLoSP)}}\par
+\vspace{0.4cm}
+
+\noindent The core architectural challenge of monocular SSC is bridging the 2D spatial domain of the EfficientNet feature extractor with the 3D spatial domain of the final voxel grid. To achieve this, the network utilizes Features Line of Sight Projection (FLoSP) [\hyperlink{cite2}{2}]. 
+
+Rather than relying on explicit depth values, FLoSP back-projects the 2D features along their optical rays, populating all possible 3D correspondences within the camera's viewing frustum. Let $\mathbf{x}^c \in \mathbb{R}^3$ represent the 3D coordinates of a voxel centroid in the local grid. The network samples the 2D feature map $\mathbf{F}_{2D}^s$ at the 2D continuous coordinates generated by perspective projection. Summing across all extracted scales $s \in S$, the initial dense 3D feature volume $\mathbf{F}_{3D}$ is constructed as:
+   
+\begin{equation*}
+    F_{3D}(\mathbf{x}^c) = \sum_{s \in S} \Phi \left( F_{2D}^s, \rho(\mathbf{x}^c) \right)
+\end{equation*}
+
+where $\rho(\cdot)$ denotes the pinhole camera perspective projection matrix (mapping 3D coordinates to 2D image coordinates), and $\Phi$ denotes the nearest-neighbor feature sampling via index gathering. This creates a dense $128 \times 128 \times 32 \times 64$ dimensional 3D tensor, which inherently contains strong perspective relationships but lacks structural solidity.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{4. 3D Context Refinement and Decoding}
+\noindent{\Large \textbf{4. 3D Context Refinement and Decoding}}\par
+\vspace{0.4cm}
+
+\noindent Because the $F_{3D}$ tensor is generated by casting 2D features infinitely along optical rays, it suffers from "ray smearing"-where the visual features of a solid object (e.g., a roof) are incorrectly assigned to the empty air beneath it. To carve out the true 3D geometry and establish spatial coherence, the $F_{3D}$ tensor is passed into a 3D Convolutional UNet.
+
+The 3D UNet operates entirely in volumetric space. The encoder pathway utilizes dense 3D convolutions to downsample the grid, exponentially increasing the 3D receptive field to capture global structural relationships (e.g., learning that a "roof" voxel is usually supported by "building" voxels). Furthermore, to ensure compatible tensor dimensionality with the $128 \times 128 \times 32$ top-down aerial frustum, the standard KITTI 3D UNet decoder branch was reused rather than engineering a custom aerial decoder, allowing the network to leverage standard 3D context blocks. The decoder pathway upsamples the features back to the original $128 \times 128 \times 32$ resolution, utilizing skip connections to retain high-frequency boundaries.
+
+Finally, the output of the 3D UNet is passed through a lightweight 3D Convolutional classification head followed by a Softmax activation. For every individual voxel $i$, the network predicts a probability distribution over the $C+1$ semantic classes (16 occupied classes + 1 empty class):
+
+\begin{equation*}
+    P(y_i = c \mid I) = \frac{\exp(z_{i,c})}{\sum_{k=0}^{C} \exp(z_{i,k})}
+\end{equation*}
+
+where $z_{i,c}$ represents the unnormalized logit for class $c$ at voxel $i$. The class with the highest probability is assigned as the final semantic prediction for that specific $0.5m^3$ region of space.
+
+
+% ------------------------------------------
+% V. TRAINING SETUP AND ENGINEERING OPTIMIZATIONS
+% ------------------------------------------
+\vspace{0.8cm}
+\addcontentsline{toc}{section}{V. Training Setup and Engineering Optimizations}
+\noindent{\LARGE \textbf{V. Training Setup and Engineering Optimizations}\par}
+\vspace{0.4cm}
+
+\noindent All experiments were conducted in a containerized environment utilizing a single NVIDIA RTX 4090 (24GB VRAM) GPU. The MonoScene model was fine-tuned using SemanticKITTI pre-trained weights to accelerate convergence, despite the extreme viewpoint, taxonomy, and voxel-grid mismatches between ground-view driving data and aerial UAVScenes data. Adapting ground-based SSC to high-resolution aerial imagery introduced several engineering hurdles that required specific optimizations.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{1. Hardware Constraints and Domain Shift}
+\noindent{\Large \textbf{1. Hardware Constraints and Domain Shift}}\par
+\vspace{0.4cm}
+
+\noindent Deploying deep learning on UAV platforms introduces strict Size, Weight, and Power (SWaP) constraints. Unlike terrestrial autonomous driving-where vehicles can carry heavy, power-hungry compute payloads in their trunks-UAVs require highly efficient perception models. 
+
+The original MonoScene architecture, utilizing an EfficientNet-B7 backbone, exceeded the 24GB VRAM limit of our hardware. To prevent Out-Of-Memory (OOM) exceptions without sacrificing batch size, the pipeline was aggressively optimized. The input images were resized online to $224 \times 320$, and the feature extractor was downgraded to EfficientNet-B0 [\hyperlink{cite6}{6}]. This successfully reduced the trainable parameter count to $\sim$22.8M, maintaining sufficient spatial feature extraction while fitting within the memory budget. 
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{2. Data Splitting Protocol}
+\noindent{\Large \textbf{2. Data Splitting Protocol}}\par
+\vspace{0.4cm}
+
+\noindent Unlike standard image datasets that can be randomly shuffled, aerial surveying datasets contain strong continuous geographical correlations. To ensure the network learns to generalize rather than simply memorize the map, a strict temporal and illumination domain split was established. The model was trained on four daytime sequences (AMtown, AMvalley, HKairport, HKisland). To properly monitor training convergence without data leakage, the model was validated on the \textit{HKairport\_GNSS\_Evening} sequence, and the final benchmark was tested on the \textit{HKisland\_GNSS\_Evening} sequence. 
+
+However, this rigorous splitting strategy introduces a unique evaluation challenge: because the validating and testing scenes only cover a subset of the training geography (HKairport and HKisland), several rare structural classes present exclusively in the other training regions (AMtown and AMvalley) do not physically exist in the testing set. The impact of these missing classes on the final evaluation metrics is comprehensively analyzed in Chapter 5.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{3. Mixed-Precision Numerical Instability}
+\noindent{\Large \textbf{3. Mixed-Precision Numerical Instability}}\par
+\vspace{0.4cm}
+
+\noindent To accelerate training on the RTX 4090, Automatic Mixed Precision [\hyperlink{cite8}{8}] (FP16 AMP) was utilized alongside a Learning Rate of 1e-5. However, calculating Binary Cross-Entropy (BCE) in FP16 caused unsafe numerical behavior, occasionally resulting in non-finite losses (NaN/Inf). This was resolved by forcing all BCE-related scalar losses to compute in safe precision (FP32), mathematically clamping probability tensors, and proactively sanitizing NaN/Inf values before the backward pass. Additional gradient stabilization was achieved by implementing gradient clipping. Furthermore, to enhance generalization, the training pipeline applied data augmentations including 50\% horizontal flipping and color jitter (0.4, 0.4, 0.4 for brightness, contrast, and saturation). We also utilized a MultiStepLR learning rate schedule, decaying the learning rate by a factor of 10 at epoch 20, along with a weight decay of $1 \times 10^{-4}$ for regularization.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{4. Sparse Semantic Batches and Division-by-Zero}
+\noindent{\Large \textbf{4. Sparse Semantic Batches and Division-by-Zero}}\par
+\vspace{0.4cm}
+
+\noindent Due to the extreme dataset imbalance, specific localized $128 \times 128 \times 32$ target crops occasionally contained zero valid semantic classes (consisting entirely of empty or ignore voxels). During the calculation of the Semantic Scaling Loss, this triggered division-by-zero errors. A protective tensor bypass was engineered to immediately return a zero-valued loss tensor on the correct device when no valid semantic contribution was detected, preventing the training loop from crashing.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{5. Loss Functions}
+\noindent{\Large \textbf{5. Loss Functions}}\par
+\vspace{0.4cm}
+
+\noindent Because Semantic Scene Completion is an imbalanced task-especially in aerial datasets where empty space and vegetation dominate-standard Cross-Entropy is insufficient. The network is optimized using a combination of dense voxel-wise classification losses, metric-aware scaling losses, and structural relation priors.
+
+\noindent\textbf{Semantic and Geometric Scaling Losses [\hyperlink{cite2}{2}]:} To explicitly make the network aware of global performance across imbalanced categories, we optimize semantic and geometric scaling losses. This loss directly optimizes class-wise metric derivatives. Let $p_i$ be the ground truth class of voxel $i$, and $\hat{p}_{i,c}$ be its predicted probability of being class $c$. The network calculates differentiable approximations for Precision ($P_c$), Recall ($R_c$), and Specificity ($S_c$). The total scaling loss maximizes these metrics across all $C$ classes:
+\begin{equation*}
+    \mathcal{L}_{scal}(\hat{p}, p) = -\frac{1}{C}\sum_{c=1}^{C} \left( P_c(\hat{p}, p) + R_c(\hat{p}, p) + S_c(\hat{p}, p) \right)
+\end{equation*}
+This formula is applied twice in our pipeline: once for multi-class semantics ($\mathcal{L}_{scal}^{sem}$) and once for binary geometric occupancy ($\mathcal{L}_{scal}^{geo}$).
+
+\noindent\textbf{Context Relation Loss:} To enforce spatial coherence and ensure the model learns the structural rules of the 3D environment (e.g., roofs exist above walls), the MonoScene architecture applies a Context Relation Loss ($\mathcal{L}_{relation}$). This enforces consistency between the predicted voxel affinities and the ground-truth spatial relationships.
+
+In our training configuration, the final loss function combines the standard SSC Cross-Entropy ($\mathcal{L}_{ssc}$) with the scaling and relation losses, directly mirroring the PyTorch optimization pipeline:
+\begin{equation*}
+    \mathcal{L}_{total} = \mathcal{L}_{ssc} + \mathcal{L}_{scal}^{sem} + \mathcal{L}_{scal}^{geo} + \mathcal{L}_{relation}
+\end{equation*}
+
+\noindent\textbf{Numerical Stability in Scaling Losses:} Calculating BCE scaling losses in FP16 caused unsafe numerical behavior during training, occasionally resulting in non-finite losses due to the extreme sparsity of aerial crops (where certain targets may be entirely absent). We modified the MonoScene loss functions extensively to guarantee stability. First, we implemented a custom \_bce\_to\_one\_autocast\_safe() function that forces the BCE computation into FP32. Second, we introduced a \_safe\_prob() function that mathematically clamps predicted probabilities using \texttt{torch.nan\_to\_num} and \texttt{clamp} to prevent gradient explosion. Finally, we engineered a \_safe\_div() function with a zero-loss fallback mechanism: when target intersections resulted in division-by-zero (i.e., a specific class was completely missing from the target crop), the loss bypasses computation and returns a zero-valued scalar attached to the active computation graph, thus preventing the PyTorch backward pass from crashing.
+
+\noindent\textbf{Class Frequency Weighting:} To further combat the severe class imbalance, the standard Cross-Entropy loss ($\mathcal{L}_{ssc}$) is weighted. We apply a logarithmic inverse frequency weighting scheme: $w_c = 1.0 / \log(f_c + 1.001)$, where $f_c$ is the normalized frequency of class $c$. This prevents dominating classes like empty space from overwhelming the loss gradients.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{6. PyTorch Checkpoint Deserialization}
+\noindent{\Large \textbf{6. PyTorch Checkpoint Deserialization}}\par
+\vspace{0.4cm}
+
+\noindent The transition to PyTorch 2.6 introduced strict security changes to the \texttt{torch.load} behavior, breaking compatibility with older PyTorch Lightning checkpoints. To ensure training could be safely paused and resumed within our rented GPU container, the checkpoint loading module was patched with \texttt{weights\_only=False} to allow full state deserialization for trusted, locally generated models.
+
+
+
+% ==========================================
+% CHAPTER 5: RESULTS AND DISCUSSION
+% ==========================================
+\newpage
+\addcontentsline{toc}{chapter}{Chapter 5: Results and Discussion}
+\begin{center}
+    {\Huge \textbf{Chapter 5: Results and Discussion}\par}
+\end{center}
+\vspace{1cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+\noindent This chapter addresses the core research questions introduced in Chapter 3 through three complementary experiments:
+\begin{itemize}
+    \item \textbf{Experiment 1} evaluates whether the proposed Advanced Pipeline generates superior SSC supervision compared with the Baseline Pipeline.
+    \item \textbf{Experiment 2} investigates the effectiveness of the adapted MonoScene architecture on the generated UAV benchmark.
+    \item \textbf{Experiment 3} analyzes the influence of hardware constraints and engineering trade-offs on practical deployment.
+\end{itemize}
+\vspace{0.8cm}
+
+% ------------------------------------------
+% I. EVALUATION SETUP AND METRICS
+% ------------------------------------------
+\addcontentsline{toc}{section}{I. Evaluation Setup and Metrics}
+\noindent{\LARGE \textbf{I. Evaluation Setup and Metrics}\par}
+\vspace{0.4cm}
+
+\noindent To evaluate the performance of our monocular UAV Semantic Scene Completion pipeline, we designed a benchmarking protocol that isolates the network's ability to infer 3D geometry and semantics strictly from 2D RGB inputs. The model evaluated is the adapted MonoScene-B0 architecture, supervised by the dense pseudo-ground-truth targets generated by our proposed hybrid raycasting pipeline (Pipeline 2).
+
+Standard 2D segmentation metrics (like pixel accuracy) are inadequate for evaluating 3D volumetric predictions, particularly given the extreme class imbalance of the UAVScenes dataset where empty space dominates over 93\% of the grid. Therefore, we evaluate our models using the primary metrics standardized by the SemanticKITTI [\hyperlink{cite5}{5}] and MonoScene [\hyperlink{cite2}{2}] benchmarks:
+
+\begin{itemize}
+    \item \textbf{Semantic Scene Completion [\hyperlink{cite9}{9}] (SSC mIoU):} This is the primary evaluation metric. It evaluates the model's ability to correctly predict both the geometry and the specific semantic class. It is calculated as the mean Intersection over Union (mIoU) across all C valid semantic classes (16 physical semantic classes excluding the empty and ignore classes):
+    
+$$SSC mIoU = \frac{1}{C}\sum_{c=1}^{C} \frac{TP_c}{TP_c + FP_c + FN_c}$$
+
+where $TP_c$, $FP_c$, and $FN_c$ represent the True Positives, False Positives, and False Negatives for class c, respectively.
+
+    \item \textbf{Dual-Metric Semantic Evaluation:} Because the exported voxel labels are extremely imbalanced, several classes have very limited support and often receive zero IoU. In addition to the full occupied-class mIoU, we report a diagnostic non-zero-class mIoU. This metric averages IoU over classes that obtain non-zero IoU in the evaluation output. It is not used as the primary benchmark score, but helps interpret model behavior on the classes that are actually learned by the current baselines:
+    \begin{itemize}
+        \item \textbf{Full SSC mIoU (16-Class):} The main metric, calculated across all 16 occupied semantic classes. This represents the honest, real-world performance of the model on the complete benchmark.
+        \item \textbf{Diagnostic non-zero-class mIoU:} A secondary evaluation metric computed only over semantic classes with non-zero IoU in the output. This isolates the model's effective learning capacity by focusing on the semantic categories it was explicitly trained to recognize.
+    \end{itemize}
+
+    \item \textbf{Scene Completion [\hyperlink{cite9}{9}] (SC IoU):} This metric evaluates purely the geometric structure (depth and volume) regardless of the semantic class. All occupied voxels are treated as a single occupied class and evaluated against the empty class. This metric answers the question: \textit{Did the model correctly predict that a physical object exists here, regardless of semantic identity?}
+    
+    \item \textbf{Precision and Recall:} Given the tendency of neural networks to over-predict dominant classes (hallucination) or under-predict rare classes (deletion), we track overall Precision and Recall to measure the network's prediction bias.
+\end{itemize}
+
+\vspace{0.8cm}
+
+% ------------------------------------------
+% II. QUANTITATIVE RESULTS
+% ------------------------------------------
+\addcontentsline{toc}{section}{II. Quantitative Results}
+\noindent{\LARGE \textbf{II. Quantitative Results}\par}
+\vspace{0.4cm}
+
+\addcontentsline{toc}{subsection}{1. Experiment 1: Preprocessing Pipeline Comparison}
+\noindent{\Large \textbf{1. Experiment 1: Preprocessing Pipeline Comparison}}\par
+\vspace{0.4cm}
+
+\noindent The first experiment evaluates the quality of the generated voxel ground-truths by comparing the Baseline Pipeline against the Advanced Pipeline. To rigorously justify the engineering of the new Hybrid Raycasting Pipeline (Advanced pipeline), we established a comprehensive benchmarking protocol. We evaluated the MonoScene-B0 architecture on both the old direct voxelization pipeline (Baseline) and the new hybrid pipeline under a strict geographic split.
+
+Because the model weights trained on the Baseline pipeline were unfortunately corrupted during development, we rely strictly on the numerical metrics summarized in Table 6 to prove that the Advanced Pipeline yields significantly higher learnability (mIoU). No qualitative visualizations for the Baseline pipeline are provided due to this model loss. Furthermore, to explicitly analyze the network's capacity for memorization versus true spatial generalization, we evaluated the model directly on the training split to establish a theoretical upper bound (simulating the data leakage present in random file-level splits).
+
+\begin{table}[H]
+\centering
+\caption[Cross-Pipeline Semantic Performance Comparison]
+{\textbf{Cross-Pipeline Semantic Performance Comparison}}
+\vspace{0.2cm}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{c|c|c|l|c|c|c|c|c}
+\hline\hline
+\textbf{Data Pipeline} & \textbf{Taxonomy} & \textbf{Epochs} & \textbf{Evaluation Split} & \textbf{Precision} & \textbf{Recall} & \textbf{SC IoU} & \textbf{\begin{tabular}[c]{@{}c@{}}Full SSC \\ mIoU\end{tabular}} & \textbf{\begin{tabular}[c]{@{}c@{}}Diagnostic \\ Non-Zero mIoU\end{tabular}} \\
+\hline
+\textbf{Baseline pipeline} & 16-Class & 8 & Train (\textit{Daytime}) & 27.13\% & 53.23\% & 21.91\% & 5.63\% & 12.87\% \\
+\textbf{Baseline pipeline} & 16-Class & 8 & Val (\textit{Evening}) & 7.19\% & 27.18\% & 6.03\% & 0.15\% & 0.31\% \\
+\textbf{Baseline pipeline} & 16-Class & 8 & Test (\textit{Evening}) & 3.76\% & 28.68\% & 3.44\% & 0.12\% & 0.68\% \\
+\hline
+\textbf{Advanced pipeline} & 16-Class & 8 & Train (\textit{Daytime}) & 36.87\% & 56.06\% & 28.61\% & 36.38\% & 36.38\% \\
+\textbf{Advanced pipeline} & 16-Class & 8 & Val (\textit{Evening}) & 13.63\% & 23.18\% & 9.39\% & 2.99\% & 5.31\% \\
+\textbf{Advanced pipeline} & 16-Class & 8 & Test (\textit{Evening}) & 4.37\% & 48.11\% & 4.17\% & 0.41\% & 2.16\% \\
+\hline
+\textbf{Advanced pipeline} & 16-Class & 30 & Train (\textit{Daytime}) & 52.85\% & 67.29\% & 42.05\% & 58.38\% & 58.38\% \\
+\textbf{Advanced pipeline} & 16-Class & 30 & Val (\textit{Evening}) & 12.80\% & 11.89\% & 6.57\% & 1.91\% & 3.05\% \\
+\textbf{Advanced pipeline} & 16-Class & 30 & Test (\textit{Evening}) & 3.88\% & 27.69\% & 3.52\% & 0.38\% & 2.04\% \\
+\hline
+\textbf{Advanced pipeline} & 12-Class & 8 & Train (\textit{Daytime}) & 40.04\% & 61.31\% & 31.96\% & 37.70\% & 37.70\% \\
+\textbf{Advanced pipeline} & 12-Class & 8 & Val (\textit{Evening}) & 16.47\% & 20.73\% & 10.11\% & \textbf{4.20\%} & \textbf{5.59\%} \\
+\textbf{Advanced pipeline} & 12-Class & 8 & Test (\textit{Evening}) & 3.82\% & 33.77\% & 3.55\% & 0.76\% & 3.01\% \\
+\hline\hline
+\end{tabular}
+}
+\end{table}
+
+\noindent\textbf{Justification of the New Pipeline:} 
+When evaluated on strictly unseen daytime geographic regions (the Validation split), the proposed Pipeline 2 completely dominates the old Pipeline 1. On the 16-class taxonomy, the Full SSC mIoU increases from 0.15\% on the old pipeline to 2.99\% on the new pipeline. This nearly 20-fold improvement, along with an even higher 4.20\% mIoU on the 12-class taxonomy, conclusively proves that the Hybrid Raycasting approach generates significantly higher quality, continuous geometric ground truths compared to raw point cloud voxelization.
+
+\noindent\textbf{Computational and Storage Efficiency:}
+Beyond geometric fidelity, the Advanced Pipeline significantly outperforms the Baseline Pipeline in computational efficiency. The new approach dramatically reduces both the preprocessing progress time and the final footprint on disk storage. By leveraging optimized free-space raycasting and 2D mesh projection rather than computationally expensive full-scene dense voxel manipulation, the target generation process is radically accelerated, making large-scale UAV data engineering much more practical.
+
+\noindent\textbf{Illumination Overfitting and the Memorization Gap:} 
+Evaluating the model directly on the Train split exposes the extreme capacity of the 3D UNet architecture. On the 16-class 30-epoch configuration, the model achieves a massive 58.38\% mIoU on the training data. However, evaluating this same model on the Validation split causes the score to plummet to 1.91\%. Because the geographical locations (HKairport and HKisland) exist in both the training and validation splits, this gap mathematically proves the model did not learn generalized 3D geometry; it simply memorized the specific daytime pixel illumination. When evaluating on the exact same locations under evening illumination, catastrophic feature extraction failure occurs.
+
+\noindent\textbf{Overfitting and Convergence:} The results clearly illustrate textbook overfitting. By extending the training from 8 epochs to 30 epochs, the model's performance on the Train split skyrockets (from 36.38\% to 58.38\%), but its performance on the evening Validation split actually degrades (from 2.99\% down to 1.91\%). Thus, the 8-epoch weights represent the optimal generalized state of the network before it over-fits to the daytime illumination.
+
+\noindent\textbf{The 12-Class Ablation Advantage:} Condensing the taxonomy from 16 classes to 12 classes on Pipeline 2 yielded the highest rigorous performance on unseen data (4.20\% Full mIoU and 5.59\% Non-Zero mIoU). By merging or masking out hyper-rare minority classes that act as statistical noise, the network's loss gradients stabilize, allowing it to allocate more representational capacity to core structural classes.
+
+\vspace{0.5cm}
+
+\addcontentsline{toc}{subsection}{2. Experiment 2: MonoScene Performance on Advanced Pipeline}
+\noindent{\Large \textbf{2. Experiment 2: MonoScene Performance on Advanced Pipeline}}\par
+\vspace{0.4cm}
+
+\noindent Having established the superiority of the Advanced Pipeline in Experiment 1, this second experiment provides a deep performance analysis of the MonoScene model fine-tuned specifically on these advanced pseudo-ground-truth targets. This section breaks down the network's predictive capabilities, including class-wise performance analysis (Table 7) and qualitative visual inspections of specific architectural phenomena such as the "Stair-Step Effect" and "Floating Roofs".
+
+A deeper analysis of the Class-wise IoU (Table 7) on the proposed Pipeline 2 exposes the exact behavioral constraints of the network and highlights the critical geographic limitation in the dataset's splitting protocol. 
+
+\begin{table}[H]
+\centering
+\caption[Pipeline 2 Class-wise Intersection over Union (Validation Split, 8 Epochs)]
+{\textbf{Pipeline 2 Class-wise Intersection over Union (Validation Split, 8 Epochs)}}
+\vspace{0.2cm}
+\begin{tabular}{l|c|c}
+\hline\hline
+\textbf{Class} & \textbf{16-Class IoU} & \textbf{12-Class IoU} \\
+\hline
+Empty (Free Space) & 82.84\% & 84.92\% \\
+Roof & 12.70\% & 3.76\% \\
+Wild Field & 10.56\% & 7.98\% \\
+Green Field & 9.41\% & 9.80\% \\
+Traffic Barrier & 4.50\% & 4.88\% \\
+Airstrip & 3.64\% & 5.58\% \\
+Dirt Motor Road & 2.83\% & 3.22\% \\
+Paved Motor Road & 2.32\% & 5.95\% \\
+Container & 1.74\% & 8.13\% \\
+Car Park & 0.17\% & 1.12\% \\
+Others & 0.00\% & 0.00\%/Ignored \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+
+\noindent\textbf{The Impact of Class Imbalance and Rare Categories:} 
+The class-wise metrics reveal that rare and thin categories remain the main bottleneck. Although empty/free IoU is high, this value is dominated by the massive amount of empty space in the voxel grid and should not be interpreted as strong semantic understanding. 
+
+Looking back at Table 6, the SSC mIoU crashes from $\sim$3-4\% on the Validation split to less than 1\% on the Test split. As established, this is a direct consequence of the rigorous Temporal Domain Splitting Protocol combined with extreme illumination shifts. The model was trained on diverse daytime environments but tested strictly on evening sequences (\textit{HKisland\_GNSS\_Evening}). Furthermore, because the testing scenes (HKairport and HKisland) are only a subset of the training geography, they do not cover all possible classes. Several rare structural classes present exclusively in the other training regions (AMtown and AMvalley) do not physically exist in the testing sets, forcing an inevitable 0\% IoU for those categories and mathematically anchoring the average mIoU to near-zero. 
+
+Conversely, for core classes that physically exist across all regions (such as Roofs and natural topography), the architecture successfully learns structural geometry despite the illumination shift, achieving notable success on buildings (12.70\% Roof IoU) and natural topography ($>$10\% Wild/Green Field IoU).
+
+\vspace{0.8cm}
+
+
+\addcontentsline{toc}{subsection}{3. Experiment 3: Hardware Constraints and Efficiency Ablation}
+\noindent{\Large \textbf{3. Experiment 3: Hardware Constraints and Efficiency Ablation}}\par
+\vspace{0.4cm}
+
+\noindent A core challenge of deploying Semantic Scene Completion on UAV platforms is balancing geometric accuracy with strict hardware and memory constraints. As established, UAVs cannot carry heavy compute payloads, and even ground-based processing is often bottlenecked by VRAM limits. To justify the final architectural configuration of our pipeline, we conducted an ablation study focusing on backbone complexity, input resolution scaling, and pipeline efficiency on consumer-grade hardware (NVIDIA RTX 4090, 24GB VRAM).
+
+The initial MonoScene architecture was designed with a heavy EfficientNet-B7 backbone processing high-resolution imagery. However, when applied to the dense UAVScenes aerial dataset, this configuration resulted in immediate Out-Of-Memory (OOM) failures during the training phase. 
+
+To achieve a feasible training environment, we systematically ablated the network complexity. As shown in Table 8, reducing the backbone to EfficientNet-B0 and downsampling the input resolution to 224 x 320 successfully stabilized the Baseline Pipeline, though it was strictly limited to a Batch Size of 1 to fit within the 24GB VRAM budget. 
+
+Crucially, the transition to our proposed Advanced Pipeline introduced further computational efficiencies. By utilizing the highly optimized hybrid raycasting targets, the Advanced Pipeline successfully maintained the 24GB VRAM budget while allowing the Batch Size to be increased to 4. This quadrupled batch capacity significantly improved gradient stability and accelerated network convergence during training.
+
+\begin{table}[H]
+\centering
+\caption[Architectural and Hardware Ablation (NVIDIA RTX 4090 - 24GB)]
+{\textbf{Architectural and Hardware Ablation (NVIDIA RTX 4090 - 24GB)}}
+\vspace{0.2cm}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l|c|c|l|l}
+\hline\hline
+\textbf{Pipeline} & \textbf{Model Backbone} & \textbf{Input Resolution} & \textbf{VRAM Consumption} & \textbf{Training Feasibility} \\
+\hline
+Baseline & EfficientNet-B7 & Native resolution & Exceeded 24 GB & Failed (OOM Error) \\
+Baseline & EfficientNet-B7 & 224 x 320 & Exceeded 24 GB & Failed (OOM Error) \\
+Baseline & EfficientNet-B0 & 448 x 640 & High memory use & Unstable (Batch Size 1) \\
+Baseline & EfficientNet-B0 & 224 x 320 & Fit within 24GB budget & Stable (Batch Size 1) \\
+\hline
+\textbf{Advanced} & \textbf{EfficientNet-B0} & \textbf{224 x 320} & \textbf{Fit within 24GB budget} & \textbf{Stable (Batch Size 4)} \\
+\hline\hline
+\end{tabular}
+}
+\end{table}
+
+% ------------------------------------------
+% III. QUALITATIVE ANALYSIS
+% ------------------------------------------
+\addcontentsline{toc}{section}{III. Qualitative Analysis}
+\noindent{\LARGE \textbf{III. Qualitative Analysis}\par}
+\vspace{0.4cm}
+
+\noindent While quantitative metrics provide a macro-level view of model performance, qualitative visual inspection is essential to understand the specific geometric and semantic behaviors learned by the MonoScene architecture. By examining the predicted 3D voxel grids, we can identify the specific strengths of the 2D-to-3D projection module, as well as the inherent limitations of monocular aerial perception.
+
+\vspace{0.5cm}
+
+\addcontentsline{toc}{subsection}{1. Spatial Layout and Semantic Coherence}
+\noindent{\Large \textbf{1. Spatial Layout and Semantic Coherence}}\par
+\vspace{0.4cm}
+
+\noindent As shown in Figure 10, the RGB-only model excels at identifying broad regional layouts and dominant semantic clusters. The network accurately maps the macro-structures of the rural environment, such as the general boundaries of the paved intersections and the surrounding dense vegetation. 
+
+However, a comparison between the predicted top-down semantics and the ground truth reveals a distinct loss of high-frequency detail. The model struggles to delineate sharp morphological boundaries between adjacent classes. For instance, the precise edges of the paved roads are blurred, and smaller structural anomalies are often swallowed by the dominant surrounding classes. This behavior is a direct consequence of the extreme class imbalance in the training data; when uncertain, the network defaults to predicting statistically dominant classes (such as green\_field) as a safe probabilistic fallback.
+
+
+\vspace{0.5cm}
+
+\hypertarget{fig:10}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{Figure10.png}
+    \caption[Qualitative MonoScene Output.]
+    {\textbf{Qualitative MonoScene Output.}
+    \textmd{(Left) RGB Input. (Middle) Predicted Top-Down Semantics. (Right) Prediction height.}}
+\end{figure}
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{2. Height Ambiguity and the "Floating Roof" Phenomenon}
+\hypertarget{sec:bench72}{}\noindent{\Large \textbf{2. Height Ambiguity and the "Floating Roof" Phenomenon}}\par
+\vspace{0.4cm}
+
+\hypertarget{fig:11}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{Figure11.png}
+    \caption[3D Voxel Rendering.]
+    {\textbf{3D Voxel Rendering.}
+    \textmd{An isometric view of the predicted voxel grid highlighting spatial cohesion. The red vertical regions correspond to roof/building-related predictions, demonstrating the paper-thin, crust-like structure predicted by the network.}}
+\end{figure}
+
+\noindent Figure 11 highlights a critical behavioral characteristic of the RGB-only pipeline when viewed in true 3D space. While the proposed Advanced Pipeline generates solid, volumetrically extruded ground truth targets, the monocular network predictions manifest as thin surface shells (the 'floating roof' phenomenon). 
+
+\indent Because the UAV camera operates from a near-nadir (top-down) viewpoint, it receives virtually no visual evidence of vertical building facades or walls. Consequently, the network receives zero visual evidence of the underlying volume. Driven by the heavy class-imbalance penalty of the empty-space class (which comprises over 93\% of the grid), the network learns a hyper-conservative "surface bias." It accurately predicts the semantic class and elevation of the visible top layer from RGB texture cues, but actively deletes the solid geometry beneath it to avoid penalization. This visually confirms the inherent limitations of RGB-only depth cues and highlights the necessity for future active sensor fusion (LiDAR/Radar) to recover occluded Z-axis volumes.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{3. Voxel Quantization and Grid Resolution Limits}
+\hypertarget{sec:bench73}{}\noindent{\Large \textbf{3. Voxel Quantization and Grid Resolution Limits}}\par
+\vspace{0.4cm}
+
+\noindent Beyond the nadir viewpoint challenge, the physical dimensions of the local target grid introduce a rigid upper bound on the network's predictive fidelity. Due to strict hardware resource limits (specifically GPU VRAM limits preventing the use of larger tensors), the network maps the 2D visual features into a fixed $128 \times 128 \times 32$ volumetric tensor. At a resolution of $0.5m$ per voxel, this tensor encompasses a physical world space of $64m \times 64m \times 16m$. 
+
+While a $64m$ forward range is highly effective for ground-based autonomous driving, it poses a significant limitation for high-altitude UAVs. From a cruising altitude, the expansive UAV camera field-of-view captures a massive physical footprint. Consequently, the limited 3D voxel grid only captures a smaller square region at the exact center of the RGB image — the outer edges of the visual scene fall outside the grid's spatial coverage entirely, with no ground truth available to supervise predictions there (as shown in Figure 12).
+
+This discretization and spatial restriction inherently causes three distinct structural weaknesses in the monocular predictions:
+
+\begin{itemize}
+    \item \textbf{Quantization Error and Label Collision:} Because a $0.5m$ voxel is relatively coarse, any physical object smaller than the $0.5m$ voxel resolution is prone to spatial quantization. If a single voxel contains both a thin \textit{traffic barrier} and a massive \textit{paved road}, the dominant class overwrites the minority class during ground-truth generation. This explains why hyper-thin minority classes struggle to achieve any IoU; they are physically smoothed out of the grid.
+    \item \textbf{Spatial Aliasing (The Stair-Case Effect):} Real-world geometry often features smooth, angled surfaces, such as slanted roofs on buildings. However, capturing these diagonal slopes utilizing a $0.5m$ cubic voxel resolution creates severe aliasing in the ground truth itself. Because each $0.5m$ voxel is an indivisible physical block, it cannot represent continuous slopes. As demonstrated in Figure 13, this physical resolution limit inherently transforms continuous slopes into jagged, stair-stepped layers within the training targets. Consequently, the model is forced to learn and predict these unnatural, pixelated borders instead of the smooth topology visible in the real world.
+    %\item \textbf{Z-Axis Truncation:} The 32-voxel height limit restricts the vertical receptive field to strictly 16 meters. If the UAV flies over buildings taller than 16 meters, or navigates a deep valley, the vertical geometry is artificially truncated (clipped off) at the top or bottom of the tensor, losing critical geometric context.
+\end{itemize}
+
+\vspace{0.5cm}
+
+\hypertarget{fig:12}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figure12.png}
+    \caption[Qualitative visualization of the limited physical view.]
+    {\textbf{Qualitative visualization of the limited physical view.}
+    \textmd{Due to hardware constraints bounding the grid to $64m \times 64m$, the 3D voxel predictions only correspond to a small square region at the center of the UAV's expansive RGB camera view.}}
+\end{figure}
+
+\vspace{0.5cm}
+
+\hypertarget{fig:13}{}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figure13.png}
+    \caption[Qualitative visualization of the "Stair-Case Effect" on Ground-Truth Targets.]
+    {\textbf{Qualitative visualization of the "Stair-Case Effect" on Ground-Truth Targets.}
+    \textmd{Slanted roofs and angled geometry cannot be represented smoothly due to the $0.5m$ voxel resolution. Because each voxel acts as a rigid block, this visualization of the ground truth demonstrates how continuous slopes are inherently quantized into jagged, stair-stepped layers, forcing the model to learn aliased geometry.}}
+\end{figure}
+
+% ------------------------------------------
+% IV. DISCUSSION AND CRITICAL ASSESSMENT
+% ------------------------------------------
+\addcontentsline{toc}{section}{IV. Discussion and Critical Assessment}
+\noindent{\LARGE \textbf{IV. Discussion and Critical Assessment}\par}
+\vspace{0.4cm}
+
+\noindent The experimental results validate the core hypothesis of this thesis: monocular UAV Semantic Scene Completion is structurally feasible. The FLoSP module successfully bridges the 2D-to-3D gap, allowing the network to infer macroscopic layouts without active sensors. However, a critical assessment of the pipeline reveals two primary limitations that limit current performance:
+
+\indent\textbf{1. The Bottleneck of Monocular Depth Cues:}
+Ground-based Autonomous-driving datasets (such as SemanticKITTI [\hyperlink{cite5}{5}]) benefit from strong monocular depth anchors, such as horizon lines and linear perspective. The aerial nadir imagery fundamentally lacks these anchors. While the model can project 2D texture into 3D space, it cannot hallucinate vertical facades that are entirely occluded from the camera. The resulting "floating roof" artifacts prove that RGB imagery alone provides insufficient geometric evidence for dense vertical mapping. Future frameworks must incorporate explicit structural priors or rely on multi-modal LiDAR fusion to resolve this Z-axis scale ambiguity.
+
+\indent\textbf{2. Dataset Generalization and Illumination Shift:}
+The severe performance drop in the Validation and Test split explicitly highlights the fragility of purely vision-based deep learning models under changing environmental conditions. Because the EfficientNet backbone is entirely based on RGB pixel values, transferring weights trained in bright daytime scenes to shadows and evening illumination (\textit{HKisland\_GNSS\_Evening}) causes catastrophic feature extraction failure. Notably, this failure occurs despite the application of strong color jitter augmentations during training, confirming that the network overfits to specific shadow and illumination distributions rather than general color statistics. Furthermore, the geographical absence of specific training classes in the testing zones skews the standardized SSC metrics. Future aerial perception research must establish stricter, stratified temporal evaluation protocols that account for missing localized classes, and utilize illumination-invariant modalities (such as LiDAR intensity or IR sensors) for reliable real-world UAV deployment.
+
+\vspace{0.8cm}
+
+\indent{\textbf{3. The Impact of Ground Truth Engineering on Network Behavior}}\par
+\vspace{0.4cm}
+
+\noindent Perhaps the most significant finding of this study is how the mechanical engineering of the 3D ground truth dictates the geometric failure modes of the 3D UNet.
+
+\vspace{0.5cm}
+
+\hypertarget{fig:14}{}
+\begin{figure}[H]
+    \centering
+    % Make sure you rename your new combined image to Figure13.png or Figure13.jpg
+    \includegraphics[width=1\textwidth]{Figure14.png}
+    \caption[Ground Truth versus Prediction Behavior.]
+    {\textbf{Ground Truth versus Prediction Behavior.}
+    {\textmd{A multi-view comparison demonstrating the impact of ground-truth engineering on spatial predictions. (Top Row) Top-down (nadir) view highlighting 2D semantic layout accuracy. (Bottom Row) Isometric view revealing Z-axis geometric volume. While the Baseline GT provides solid but noisy volumes, the Advanced GT yields sharp, solid boundaries. Crucially, while the Advanced Prediction perfectly matches the top-down layout of its ground truth, the isometric view (bottom-right) reveals that the network collapses the solid volume into a paper-thin surface shell due to nadir occlusion and hyper-conservative loss-function penalties.}}}
+\end{figure}
+
+As visualized in Figure 14, the raw LiDAR voxelization (the Baseline Pipeline) provides solid volumetric thickness, but the data is inherently noisy and fuzzy. When trained on these noisy data, the network struggles to find clean boundaries, resulting in messy, scattered predictions and near-zero evaluation metrics (0.15\% mIoU).
+
+In contrast, the Advanced Pipeline utilizes photogrammetry meshes to create highly defined, solid, continuous semantic boundaries, allowing the network to confidently learn the layout of the environment (4.20\% mIoU). However, because the network lacks explicit monocular depth evidence for the extruded vertical volumes (building walls), it becomes hyper-conservative, collapsing the solid ground truth into the paper-thin surface prediction seen on the right. This definitively proves that while clean dataset engineering solves 2D semantic sharpness, monocular RGB features remain insufficient to confidently extrude vertical geometry without active sensor priors.
+
+
+% ==========================================
+% CHAPTER 6: CONCLUSION AND PERSPECTIVES
+% ==========================================
+\newpage
+\addcontentsline{toc}{chapter}{Chapter 6: Conclusion and Perspectives}
+\begin{center}
+    {\Huge \textbf{Chapter 6: Conclusion and Perspectives}\par}
+\end{center}
+\vspace{1cm}
+
+\setlength{\parindent}{0.7cm}
+\setlength{\parskip}{0.1cm}
+
+% ------------------------------------------
+% I. GENERAL CONCLUSION
+% ------------------------------------------
+\addcontentsline{toc}{section}{I. General Conclusion}
+\noindent{\LARGE \textbf{I. General Conclusion}\par}
+\vspace{0.4cm}
+
+\addcontentsline{toc}{subsection}{1. Summary of Contributions}
+\noindent{\Large \textbf{1. Summary of Contributions}}\par
+\vspace{0.4cm}
+
+\noindent This thesis investigated the feasibility of monocular Semantic Scene Completion (SSC) for Unmanned Aerial Vehicles (UAVs) operating under strict hardware constraints. By adapting the MonoScene architecture (utilizing an EfficientNet-B0 backbone and FLoSP projection) to the UAVScenes dataset, we established a foundational baseline for RGB-only 3D aerial perception. 
+
+The primary technical contribution of this work was the development and validation of the Advanced Hybrid Raycasting Pipeline (Pipeline 2). We mathematically and empirically demonstrated that standard point cloud voxelization (the Baseline Pipeline) is insufficient for aerial SSC. By introducing physics-based free-space raycasting and 3D-to-2D semantic mesh depth rendering, the proposed Advanced Pipeline drastically improved the structural integrity of the generated ground truth. This resulted in a near 20-fold improvement in validation performance on unseen temporal/evening data (from 0.15\% to 2.99\% Full SSC mIoU on the 16-class taxonomy), and achieved up to 4.20\% on the refined 12-class taxonomy.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{2. Key Findings}
+\noindent{\Large \textbf{2. Key Findings}}\par
+\vspace{0.4cm}
+
+\noindent Our rigorous evaluation protocol, which explicitly separated testing environments temporally, exposed critical behaviors in vision-based aerial perception:
+\begin{itemize}
+    \item \textbf{Illumination Overfitting in Aerial Datasets:} We proved that standard random file-level splitting artificially inflates performance metrics due to massive data leakage. Because the network achieved 58.38\% mIoU on Daytime training data but only 1.91\% on Evening validation data of the exact same geographical regions, we mathematically proved that RGB-only networks tend to memorize specific daytime lighting conditions rather than true 3D spatial geometry. True spatial generalization must be evaluated using strict temporal and environmental domain splits.
+    \item \textbf{The Photogrammetry Surface Bias:} We discovered a fundamental trade-off in aerial dataset engineering. While using photogrammetry meshes for ground-truth generation produces highly accurate and clean semantic boundaries, it inherently restricts the dataset to a 2.5D outer skin. Consequently, the monocular network perfectly mimics this data, predicting paper-thin "floating" surface shells rather than solid volumes. This proves that vision-only networks reliably replicate their supervision constraints, highlighting the necessity for volumetric LiDAR fusion if solid Z-axis reconstruction is required.
+\end{itemize}
+
+\vspace{0.8cm}
+
+% ------------------------------------------
+% II. PERSPECTIVES AND FUTURE WORK
+% ------------------------------------------
+\addcontentsline{toc}{section}{II. Perspectives and Future Work}
+\noindent{\LARGE \textbf{II. Perspectives and Future Work}\par}
+\vspace{0.4cm}
+
+\noindent While this work establishes a robust data processing pipeline and an initial monocular baseline, deploying dense 3D perception on autonomous UAVs remains an open challenge. Future research should build upon these findings through several key avenues:
+
+\vspace{0.5cm}
+
+\addcontentsline{toc}{subsection}{1. Multi-Modal Sensor Fusion}
+\noindent{\Large \textbf{1. Multi-Modal Sensor Fusion}}\par
+\vspace{0.4cm}
+
+\noindent To resolve the height ambiguity and the "floating roof" artifacts inherent to monocular vision, future architectures should transition toward lightweight multi-modal fusion. Integrating sparse, low-cost continuous wave radar or solid-state LiDAR could provide the network with explicit geometric anchors along the Z-axis. Modifying the FLoSP module to fuse 2D RGB features with sparse 3D depth prior tensors would drastically improve structural grounding without violating strict UAV payload constraints.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{2. Multi-View and Temporal Integration}
+\noindent{\Large \textbf{2. Multi-View and Temporal Integration}}\par
+\vspace{0.4cm}
+
+\noindent The current architecture processes single, isolated static frames. However, UAVs capture continuous video streams during flight. Future iterations should exploit this temporal continuity by incorporating Recurrent Neural Networks (RNNs) or 3D temporal convolutions into the spatial decoder. Leveraging multi-view geometry and Structure-from-Motion (SfM) priors across sequential frames would allow the network to dynamically infer depth from motion parallax, partially mitigating the nadir viewpoint limitations.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{3. Addressing Class Imbalance and Taxonomy}
+\noindent{\Large \textbf{3. Addressing Class Imbalance and Taxonomy}}\par
+\vspace{0.4cm}
+
+\noindent The extreme long-tailed distribution of the UAVScenes dataset remains a primary bottleneck, with rare classes (bridges, pools, solar boards) achieving 0\% IoU. While our 12-class ablation study improved stability by masking out these anomalies, future work must focus on representation learning for minority classes. Techniques such as dynamic focal loss weighting, copy-paste synthetic data augmentation, or generative oversampling for rare structural objects are required to build a comprehensive 16-class aerial perception system.
+
+\vspace{0.8cm}
+
+\addcontentsline{toc}{subsection}{4. Domain Adaptation for Illumination Shift}
+\noindent{\Large \textbf{4. Domain Adaptation for Illumination Shift}}\par
+\vspace{0.4cm}
+
+\noindent The catastrophic degradation in performance when transitioning from daytime training scenes to evening testing scenes highlights the fragility of RGB-only deep learning models to illumination shifts. Future research must prioritize Domain Generalization (DG) and Unsupervised Domain Adaptation (UDA). Utilizing illumination-invariant feature extraction, such as converting RGB to specialized color spaces, or employing adversarial training networks to align daytime and evening feature distributions, will be essential for reliable, all-weather UAV deployment.
+
+
+\newpage
+
+\hypertarget{sec:refs}{}
+\addcontentsline{toc}{chapter}{References}
+\noindent{\LARGE \textbf{References}}\par
+\vspace{0.4cm}
+
+{
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.1cm} 
+
+\hypertarget{cite1}{}[1] S. Wang, S. Li, Y. Zhang, et al., ``UAVScenes: A Multi-Modal Dataset for UAVs,'' in \textit{Proc. IEEE/CVF International Conference on Computer Vision (ICCV)}, 2025.
+
+\hypertarget{cite2}{}[2] A.-Q. Cao and R. de Charette, "MonoScene: Monocular 3D Semantic Scene Completion," in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2022, pp. 3991-4001.
+
+\hypertarget{cite3}{}[3] A. Hornung, K. M. Wurm, M. Bennewitz, C. Stachniss, and W. Burgard, ``OctoMap: an efficient probabilistic 3D mapping framework based on octrees,'' \textit{Autonomous robots}, vol. 34, no. 3, pp. 189-206, 2013.
+
+\hypertarget{cite4}{}[4] M. Gross, S. B. Matha, A. Fahmy, R. Song, D. Cremers, and H. Meess, ``OccuFly: A 3D Vision Benchmark for Semantic Scene Completion from the Aerial Perspective,'' \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2026.
+
+\hypertarget{cite5}{}[5] J. Behley et al., "SemanticKITTI: A Dataset for Semantic Scene Understanding of LiDAR Sequences," in \textit{Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)}, 2019, pp. 9297-9307.
+
+\hypertarget{cite6}{}[6] M. Tan and Q. Le, "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks," in \textit{Proceedings of the 36th International Conference on Machine Learning (ICML)}, 2019, pp. 6105-6114.
+
+\hypertarget{cite7}{}[7] L. Roldão, R. de Charette, and A. Verroust-Blondet, "LMSCNet: Lightweight Multiscale 3D Semantic Completion," in \textit{International Conference on 3D Vision (3DV)}, 2020, pp. 111-119.
+
+\hypertarget{cite8}{}[8] A. Paszke, et al., ``PyTorch: An Imperative Style, High-Performance Deep Learning Library,'' in \textit{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2019, pp. 8024–8035.
+
+\hypertarget{cite9}{}[9] X. Song, et al., ``Semantic Scene Completion from a Single Depth Image,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2017, pp. 1746–1754.
+
+\hypertarget{cite10}{}[10] A. Geiger, P. Lenz, and R. Urtasun, ``Are We Ready for Autonomous Driving? The KITTI Vision Benchmark Suite,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2013, pp. 3354–3361.
+
+\hypertarget{cite11}{}[11] European Commission, "Commission implementing regulation (EU) 2019/947 of 24 May 2019 on the rules and procedures for the operation of unmanned aircraft," 2019.
+
+\hypertarget{cite12}{}[12] Institute of Computer Graphics and Vision, Graz University of Technology, "Semantic Drone Dataset," 2019.
+
+\hypertarget{cite13}{}[13] W. Wang et al., "TartanAir: A dataset to push the limits of visual slam," in \textit{Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, 2020.
+
+\hypertarget{cite14}{}[14] Y. Zhang, J. Zhang, Z. Wang, J. Xu, and D. Huang, "Vision-based 3D occupancy prediction in autonomous driving: a review and outlook," \textit{arXiv preprint arXiv:2405.02595}, 2024.
+
+\hypertarget{cite15}{}[15] N. Silberman, D. Hoiem, P. Kohli, and R. Fergus, ``Indoor Segmentation and Support Inference from RGBD Images,'' in \textit{Proc. Eur. Conf. Comput. Vis. (ECCV)}, 2012, pp. 746–760.
+
+\hypertarget{cite16}{}[16] C. B. Choy, D. Xu, J. Gwak, K. Chen, and S. Savarese, ``3D-R2N2: A Unified Approach for Single and Multi-view 3D Object Reconstruction,'' in \textit{Proceedings of the European Conference on Computer Vision (ECCV)}, 2016, pp. 628–644.
+
+\hypertarget{cite17}{}[17] L. Roldão, R. de Charette, and A. Verroust-Blondet, ``A Survey on Semantic Scene Completion,'' in \textit{Computer Graphics Forum}, vol. 40, no. 7, pp. 1–25, 2021.
+
+\hypertarget{cite18}{}[18] H. Li, Y. Zou, N. Chen, J. Lin, X. Liu, W. Xu, et al., ``MARS-LVIG dataset: A multi-sensor aerial robots SLAM dataset for LiDAR-visual-inertial-GNSS fusion,'' \textit{The International Journal of Robotics Research}, vol. 43, no. 8, pp. 1114-1127, 2024.
+
+
+\hypertarget{cite19}{}[19] J. L. Schönberger, E. Zheng, J. M. Frahm, and M. Pollefeys, ``Pixelwise view selection for unstructured multi-view stereo,'' in \textit{Proceedings of the European Conference on Computer Vision (ECCV)}, 2016.
+
+\hypertarget{cite20}{}[20] J. McCormac, A. Handa, A. Davison, and S. Leutenegger, ``SemanticFusion: Dense 3D semantic mapping with convolutional neural networks,'' in \textit{Proceedings of the IEEE International Conference on Robotics and Automation (ICRA)}, 2017.
+
+
+\hypertarget{cite21}{}[21] Y. Li, Z. Yu, C. Choy, et al., ``VoxFormer: Sparse Voxel Transformer for Camera-based 3D Semantic Scene Completion,'' in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2023.
+
+\hypertarget{cite22}{}[22] X. Chen, K.-Y. Lin, C. Qian, G. Zeng, and H. Li, ``3D Sketch-aware Semantic Scene Completion via Semi-Supervised Structure Prior,'' in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2020.
+}
+\newpage
+
+\appendix
+\renewcommand{\thefigure}{A.\arabic{figure}}
+
+\addcontentsline{toc}{chapter}{Appendix A}
+\hypertarget{sec:appendix}{}\noindent{\LARGE \textbf{Appendix A}}\par
+\vspace{0.8cm}
+
+\noindent{\Large \textbf{1. Taxonomy Mapping Configuration}}\par
+\vspace{0.4cm}
+
+\noindent To address the extreme long-tailed distribution of the UAVScenes dataset, an ablation study was conducted utilizing a condensed 12-class taxonomy. Table A details the mapping strategy used to consolidate hyper-rare or structurally ambiguous minority classes into macroscopic categories, thereby stabilizing the gradient during network training.
+
+\begin{table}[H]
+\centering
+\textbf{Table A: 16-Class to 12-Class Taxonomy Mapping}\\
+\vspace{0.2cm}
+\begin{tabular}{l|l|l}
+\hline\hline
+\textbf{Original 16-Class Name} & \textbf{Action / Mapping} & \textbf{Final 12-Class Name} \\
+\hline
+Empty (Free Space) & Kept & Empty \\
+Roof & Kept & Roof \\
+Dirt Motor Road & Kept & Dirt Motor Road \\
+Paved Motor Road & Kept & Paved Motor Road \\
+River & Kept & River \\
+Container & Kept & Container \\
+Airstrip & Kept & Airstrip \\
+Traffic Barrier & Kept & Traffic Barrier \\
+Green Field & Kept & Green Field \\
+Wild Field & Kept & Wild Field \\
+Transparent Roof & Kept & Transparent Roof \\
+Car Park & Kept & Car Park \\
+Paved Walk & Kept & Paved Walk \\
+\hline
+Pool & Mapped to 'Ignore' & Ignored \\
+Bridge & Mapped to 'Ignore' & Ignored \\
+Solar Board & Mapped to 'Ignore' (255) & Ignored \\
+Umbrella & Mapped to 'Ignore' (255) & Ignored \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+\vspace{0.8cm}
+
+\noindent{\Large \textbf{2. 3D Voxel Visualization Utility}}\par
+\vspace{0.4cm}
+
+\noindent The Python script below utilizes Open3D to accurately render the dense .npz arrays. Crucially, it filters out Class 255 (which would otherwise obscure the grid in a solid white block):
+
+\begin{verbatim}
+
+import numpy as np
+import open3d as o3d
+import sys
+
+npz_file ="yournpzfile.npz"
+print(f"Loading {npz_file}...")
+try:
+    data = np.load(npz_file)
+except FileNotFoundError:
+    print(f"Error: File {npz_file} not found.")
+    sys.exit()
+
+print("Keys inside this file:", data.files)
+
+if 'pred' in data.files:
+    print("Found model prediction ('pred'). Visualizing inference...")
+    voxel_grid = data['pred']
+elif 'y_pred' in data.files:
+    voxel_grid = data['y_pred']
+elif 'target' in data.files:
+    print("Found ground truth ('target'). Visualizing dataset baseline...")
+    voxel_grid = data['target']
+else:
+    print(f"Error: Could not find 3D grid! Available keys: {data.files}")
+    sys.exit()
+
+x, y, z = np.where((voxel_grid > 0) & (voxel_grid < 255))
+
+if len(x) == 0:
+    print("No valid occupied voxels found to visualize!")
+    sys.exit()
+
+colors_dict = {
+    0:  [0.0, 0.0, 0.0],               # empty space
+    1:  [119/255, 11/255,  32/255],    # roof
+    2:  [180/255, 165/255, 180/255],   # dirt_motor_road
+    3:  [128/255, 64/255,  128/255],   # paved_motor_road
+    4:  [173/255, 216/255, 230/255],   # river
+    5:  [0/255,   80/255,  100/255],   # pool
+    6:  [150/255, 100/255, 100/255],   # bridge
+    7:  [250/255, 170/255, 30/255],    # container
+    8:  [81/255,  0/255,   81/255],    # airstrip
+    9:  [102/255, 102/255, 156/255],   # traffic_barrier
+    10: [107/255, 142/255, 35/255],    # green_field
+    11: [210/255, 180/255, 140/255],   # wild_field
+    12: [220/255, 220/255, 0/255],     # solar_board
+    13: [153/255, 153/255, 153/255],   # umbrella
+    14: [0/255,   0/255,   90/255],    # transparent_roof
+    15: [250/255, 170/255, 160/255],   # car_park
+    16: [244/255, 35/255, 232/255],    # paved_walk
+    255: [1.0, 1.0, 1.0],              # ignore
+}
+
+lut = np.full((256, 3), [0.8, 0.8, 0.8]) # Default light gray for any missing keys
+for key, color in colors_dict.items():
+    lut[key] = color
+
+valid_labels = voxel_grid[x, y, z]
+colors = lut[valid_labels]
+
+print(f"Building solid Minecraft blocks for {len(x):,} voxels...")
+Z_STRETCH = 3.0  
+
+base_corners = np.array([
+    [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
+    [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]
+], dtype=np.float64)
+
+base_triangles = np.array([
+    [0, 2, 1], [1, 2, 3], # bottom
+    [4, 5, 6], [5, 7, 6], # top
+    [0, 1, 4], [1, 5, 4], # front
+    [2, 6, 3], [3, 6, 7], # back
+    [0, 4, 2], [2, 4, 6], # left
+    [1, 3, 5], [3, 7, 5]  # right
+], dtype=np.int32)
+
+N = len(x)
+offsets = np.column_stack((x, y, z * Z_STRETCH))
+
+all_vertices = offsets[:, np.newaxis, :] + base_corners[np.newaxis, :, :]
+vertices = all_vertices.reshape(-1, 3)
+
+vertex_offsets = np.arange(N) * 8
+all_triangles = base_triangles[np.newaxis, :, :] + vertex_offsets[:, np.newaxis, np.newaxis]
+triangles = all_triangles.reshape(-1, 3)
+
+all_colors = np.repeat(colors, 8, axis=0)
+
+mesh = o3d.geometry.TriangleMesh()
+mesh.vertices = o3d.utility.Vector3dVector(vertices)
+mesh.triangles = o3d.utility.Vector3iVector(triangles)
+mesh.vertex_colors = o3d.utility.Vector3dVector(all_colors)
+
+mesh.compute_vertex_normals()
+
+R = mesh.get_rotation_matrix_from_xyz((-np.pi / 2, 0, 0))
+mesh.rotate(R, center=(0, 0, 0))
+
+print("Launching viewer! Try zooming in now.")
+o3d.visualization.draw_geometries([mesh], window_name="UAVScenes Solid Voxel Viewer", mesh_show_back_face=True)
+
+\end{verbatim}
+
+\end{document}

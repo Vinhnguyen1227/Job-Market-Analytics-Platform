@@ -4,18 +4,17 @@
 
 While Chapter 7 documents the multi-adapter runtime orchestrator, this chapter details the offline training pipeline designed to produce and align the specialized adapter models. The pipeline operates as a sequential data transformation pipeline, shifting unstructured data configurations through specialized learning representations to produce three task-specific QLoRA adapters. The training process runs end-to-end on a single NVIDIA RTX A5000 GPU ($24$ GB VRAM) within approximately $13$ hours.
 
-```mermaid
-flowchart TD
-    P1["Phase 1: Synthetic CV Generation"] -->|"500 Resumes (JSON/PDF)"| P2["Phase 2: Extraction Cascade"]
-    P2 -->|"Canonical Schema"| P3["Phase 3: Validation & Vector Storage"]
-    P3 -->|"Validated Resumes"| P4["Phase 4: Task-Specific RAG Seeds"]
-    P4 -->|"SFT/DPO Inputs"| P5["Phase 5: Dataset Synthesis"]
-    P5 -->|"ChatML Datasets"| P6["Phase 6: QLoRA & DPO Training"]
-    P6 -->|"Task Adapters"| P7["Phase 7: LLM-as-Judge Benchmark"]
-```
+The offline training pipeline operates across seven sequential phases to produce and align the specialized adapter models:
+1. **Phase 1: Synthetic CV Generation**: Generates 500 resumes in JSON and PDF formats based on predefined role configurations.
+2. **Phase 2: Extraction Cascade**: Parses resumes and structures them into a canonical resume schema using regex and PhoBERT NER.
+3. **Phase 3: Validation & Vector Storage**: Performs logical validation, assigns quality scores, and stores embeddings and structured profiles in Qdrant and MongoDB.
+4. **Phase 4: Task-Specific RAG Seeds**: Executes retrieval-augmented generation passes to produce task inputs for CV coaching, job matching, and interview prep.
+5. **Phase 5: Dataset Synthesis**: Compiles and formats training inputs into ChatML datasets.
+6. **Phase 6: QLoRA & DPO Training**: Fine-tunes the base model parameters sequentially using QLoRA and preference alignment.
+7. **Phase 7: LLM-as-Judge Benchmark**: Evaluates model performance using an automated benchmark framework.
 
-The pipeline progresses from raw domain specifications to validated adapter models through a continuous flow of data representations:
-$$\text{Role Configurations} \rightarrow \text{Structured CV Content} \rightarrow \text{Canonical Schema} \rightarrow \text{Quality-Scored Vector Embeddings} \rightarrow \text{Task Seed Outputs} \rightarrow \text{ChatML Datasets} \rightarrow \text{QLoRA Adapters}$$
+
+The pipeline progresses from raw domain specifications to validated adapter models through a continuous flow of data representations. The pipeline transforms Role Configurations into Structured CV Content, which is parsed into a Canonical Schema. The schema is then validated and stored as Quality-Scored Vector Embeddings, from which Task Seed Outputs are generated. These seeds are compiled into ChatML Datasets to fine-tune the QLoRA Adapters.
 
 ---
 
@@ -35,15 +34,8 @@ The synthetic generation process functions as a three-stage pipeline:
 ---
 
 ## 8.3 Data Structuring Pipeline
+The data structuring pipeline transforms raw CV text into a normalized, quality-scored vector representation through five sequential stages: semantic segmentation, extraction cascade, canonical normalization, quality scoring and validation, and vector and document storage.
 
-```mermaid
-flowchart LR
-    RAW["Raw CV Text"] --> SEG["Semantic Segmentation"]
-    SEG --> EXT["Extraction Cascade (Regex + NER)"]
-    EXT --> NORM["Canonical Normalization"]
-    NORM --> VAL["Quality Scorer & Validator"]
-    VAL --> STOR["Vector & Document Storage"]
-```
 
 ### 8.3.1 Semantic Extraction Cascade
 The raw text parsed from generated resumes is mapped to a structured, typed `CanonicalResume` data contract through a multi-stage cascade:
@@ -96,27 +88,8 @@ To align the coaching adapter (Adapter B) with human feedback preferences, the p
 $$\mathcal{L}_{\text{DPO}} = -\mathbb{E}_{(x, y_w, y_l) \sim D} \left[ \log \sigma \left( \beta \log \frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \beta \log \frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)} \right) \right]$$
 where $y_w$ represents the chosen Gemini feedback, $y_l$ represents the rejected base model output, and $\beta=0.1$ controls the strength of the KL-divergence constraint relative to the reference model.
 
-```mermaid
-flowchart TD
-    BASE["Layer 1: Base Qwen2.5-1.5B (4-bit NF4)<br>Frozen"]
-    SFT["Layer 2: SFT Adapter (cv-coaching)<br>Frozen"]
-    DPO["Layer 3: DPO Adapter (preference alignment)<br>Trainable"]
-    
-    BASE --> SFT
-    SFT --> DPO
-```
-
 Rather than fine-tuning the SFT weights directly—which leads to performance degradation and formatting drift in small models—the pipeline stacks a new trainable DPO adapter layer on top of the frozen SFT adapter weights, maintaining a clear separation between domain formatting knowledge and style preference alignment.
 
-### 8.6.3 Fine-Tuning Performance Summary
-All three adapters were trained sequentially, using a paged 8-bit AdamW optimizer and cosine learning rate schedules:
-
-| Adapter | Phase | Train Loss | Eval Loss | Compute Time | Saved Size |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Adapter A: Classifier** | SFT | $0.1537$ | $0.0918$ | $5.6$ hours | $81.4$ MB |
-| **Adapter B: HR Coach** | SFT | $0.2837$ | $0.4901$ | $1.8$ hours | $81.4$ MB |
-| **Adapter B: HR Coach** | DPO | $0.0345$ | $< 0.001$ | $4.3$ hours | $81.4$ MB |
-| **Adapter C: Structured Gen** | SFT | $0.9651$ | $0.8684$ | $1.6$ hours | $81.4$ MB |
 
 ---
 

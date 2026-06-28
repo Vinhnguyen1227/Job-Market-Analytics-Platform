@@ -5,70 +5,140 @@ The foundation of the CareerIntel platform is a highly resilient, polyglot micro
 
 This chapter focuses on the four core platform services that underpin the data management and user-facing layers (Next.js, Elasticsearch, Redis, MongoDB). The remaining three services—\texttt{chatbot-api}, \texttt{celery-worker}, and \texttt{qdrant}—form the AI Chatbot subsystem and are documented in the companion thesis (Thesis 1).
 
+The following system-wide data flow diagram illustrates how each chapter in this thesis corresponds to distinct architectural stages and data movements across the platform:
+
+\begin{verbatim}
+flowchart TD
+    subgraph Ch2["Chapter 2: Data Acquisition"]
+        SCRAPE["Playwright Scrapers"]
+        NORM["Offline Normalization"]
+    end
+
+    subgraph Ch3["Chapter 3: Polyglot Persistence"]
+        SUPA[("Supabase (PostgreSQL)<br/>Source of Truth")]
+        REDIS[("Redis Cache<br/>Sessions & Security")]
+    end
+
+    subgraph Ch4["Chapter 4: Search Engine"]
+        ES[("Elasticsearch Index")]
+        SYNC["sync.ts Sync Pipeline"]
+    end
+
+    subgraph Ch5["Chapter 5: Auth & Security"]
+        AUTH["Supabase Auth / Server Actions"]
+        SEC["JWT Blacklist & Rate Limiting"]
+    end
+
+    subgraph Ch6["Chapter 6: Next.js Frontend"]
+        UI["App Router UI / Pages"]
+        STATE["URL-driven Search State"]
+    end
+
+    %% Flows
+    SCRAPE -->|"Upsert raw"| SUPA
+    NORM -->|"Upsert normalized"| SUPA
+    SUPA -->|"Batch pagination"| SYNC
+    SYNC -->|"Bulk push"| ES
+    
+    UI -->|"1. Auth request"| AUTH
+    AUTH -->|"2. Identity check"| SUPA
+    AUTH -.->|"3. Blacklist/Rate limit"| SEC
+    SEC -.->|"Read/Write"| REDIS
+    
+    UI -->|"4. Faceted Search"| STATE
+    STATE -->|"5. Search query"| ES
+\end{verbatim}
+
 \section{Core Platform Topology}
 The primary user-facing and data management layers of the application are supported by the following containerized services:
 \begin{itemize}
-    \item \textbf{\texttt{next-app}}: The Next.js 16 (App Router) frontend serving both Server-Side Rendered (SSR) web pages and API routes (\texttt{port 3000}). It acts as the primary gateway for users interacting with the job search interface and user profiles.
-    \item \textbf{\texttt{elasticsearch}}: An Elasticsearch 8.13.0 node optimized for complex full-text queries and faceted filtering, essential for querying thousands of normalized job postings.
-    \item \textbf{\texttt{redis}}: Operates as an in-memory session cache and handles rapid enumerations (e.g., job tracking state), utilizing the \texttt{ioredis} library on the Next.js side. The container is configured with \textbf{password-based authentication} (\texttt{--requirepass}) to prevent unauthorized access, and employs \textbf{Append-Only File (AOF) persistence} (\texttt{--appendonly yes}) to ensure that cached data survives container restarts by writing every mutation to an append-only log on disk.
-    \item \textbf{\texttt{mongodb}}: Provides document-based storage for flexible data schemas, utilized heavily by the Next.js API routes for managing user chat sessions via the \texttt{chatService}.
+\item \textbf{\texttt{next-app}}: The Next.js 16 (App Router) frontend serving both Server-Side Rendered (SSR) web pages and API routes (\texttt{port 3000}). It acts as the primary gateway for users interacting with the job search interface and user profiles.
+\item \textbf{\texttt{elasticsearch}}: An Elasticsearch 8.13.0 node optimized for complex full-text queries and faceted filtering, essential for querying thousands of normalized job postings.
+\item \textbf{\texttt{redis}}: Operates as an in-memory session cache and handles rapid enumerations (e.g., job tracking state), utilizing the \texttt{ioredis} library on the Next.js side. The container is configured with \textbf{password-based authentication} (\texttt{--requirepass}) to prevent unauthorized access, and employs \textbf{Append-Only File (AOF) persistence} (\texttt{--appendonly yes}) to ensure that cached data survives container restarts by writing every mutation to an append-only log on disk.
+\item \textbf{\texttt{mongodb}}: Provides document-based storage for flexible data schemas, utilized heavily by the Next.js API routes for managing user chat sessions via the \texttt{chatService}.
 \end{itemize}
 
 (Note: The core user and job data are persisted in a managed Supabase PostgreSQL instance, which the containerized services access securely via Service Role Keys).
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/chapter_1_thesis_2_diagram_1.pdf}
-    \caption{Docker Compose Network Topology (7 Containers)}
-    \label{fig:chapter_1_diagram_1}
-\end{figure}
+\begin{verbatim}
+graph TB
+    subgraph "Host Machine"
+        OLLAMA["Ollama (Host GPU)<br/>:11434"]
+    end
+
+    subgraph "Docker Compose Network (7 Containers)"
+        subgraph "Core Platform (Thesis 2)"
+            NEXT["next-app<br/>Next.js 16<br/>:3000"]
+            ES["elasticsearch<br/>ES 8.13.0<br/>:9200, :9300"]
+            REDIS["redis<br/>Alpine + AOF + Auth<br/>:6379"]
+            MONGO["mongodb<br/>Mongo Latest<br/>:27017"]
+        end
+
+        subgraph "AI Subsystem (Thesis 1)"
+            CHATBOT["chatbot-api<br/>FastAPI<br/>:8000"]
+            CELERY["celery-worker<br/>Celery ML Queue"]
+            QDRANT["qdrant<br/>Vector DB<br/>:6333"]
+        end
+
+        SHARED["shared_tmp<br/>(Volume)"]
+    end
+
+    NEXT -->|"depends_on<br/>service_healthy"| REDIS
+    NEXT -->|"depends_on<br/>service_healthy"| MONGO
+    NEXT -->|"depends_on<br/>service_healthy"| ES
+    CHATBOT -->|"depends_on<br/>service_healthy"| REDIS
+    CHATBOT -->|"depends_on<br/>service_healthy"| ES
+    CHATBOT -->|"depends_on<br/>service_started"| QDRANT
+    CELERY -->|"depends_on"| REDIS
+    CELERY -->|"depends_on"| QDRANT
+
+    CHATBOT <--> SHARED
+    CELERY <--> SHARED
+    CHATBOT -->|"host.docker.internal"| OLLAMA
+    CELERY -->|"host.docker.internal"| OLLAMA
+\end{verbatim}
 
 \section{Next.js Production Containerization}
 The \texttt{next-app} service is deployed using a highly optimized, multi-stage Dockerfile (38 lines) designed specifically for Node.js environments.
 
 \begin{enumerate}
-    \item \textbf{Stage 1 (deps)}: Utilizes \texttt{node:20-alpine} and \texttt{npm ci} to cleanly install dependencies, maximizing cache hits during the build process.
-    \item \textbf{Stage 2 (builder)}: Compiles the React application. Telemetry is explicitly disabled (\texttt{NEXT\_TELEMETRY\_DISABLED=1}) to prevent external analytics requests during CI/CD. The build outputs an optimized \texttt{.next} standalone directory.
-    \item \textbf{Stage 3 (runner)}: The final production image. It explicitly copies only the five necessary compilation artifacts (\texttt{package.json}, \texttt{node\_modules}, \texttt{public}, \texttt{.next}, \texttt{next.config.js}) from the builder stage. This drastically reduces the final attack surface and image size, establishing a secure environment configured tightly around \texttt{NODE\_ENV=production}.
+\item \textbf{Stage 1 (deps)}: Utilizes \texttt{node:20-alpine} and \texttt{npm ci} to cleanly install dependencies, maximizing cache hits during the build process.
+\item \textbf{Stage 2 (builder)}: Compiles the React application. Telemetry is explicitly disabled (\texttt{NEXT\_TELEMETRY\_DISABLED=1}) to prevent external analytics requests during CI/CD. The build outputs an optimized \texttt{.next} standalone directory.
+\item \textbf{Stage 3 (runner)}: The final production image. It explicitly copies only the five necessary compilation artifacts (\texttt{package.json}, \texttt{node\_modules}, \texttt{public}, \texttt{.next}, \texttt{next.config.js}) from the builder stage. This drastically reduces the final attack surface and image size, establishing a secure environment configured tightly around \texttt{NODE\_ENV=production}.
 \end{enumerate}
 
 \section{Database Health Probing \& Startup Sequencing}
 In a distributed microservices environment, strict boot sequencing is mandatory to prevent cascade failures when upstream dependencies are unresponsive. CareerIntel implements comprehensive database health probing directly within the \texttt{docker-compose.yml}.
 
-Services do not blindly depend on container startup; instead, they utilize the \texttt{depends\_on} configuration coupled with \texttt{condition: service\_healthy}.
+Most application services do not blindly depend on container startup; instead, they utilize the \texttt{depends\_on} configuration coupled with \texttt{condition: service\_healthy} to gate boot sequence.
 
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|l|l|l|l|}
-        \hline
-        \textbf{Service} & \textbf{Health Check Command} & \textbf{Interval} & \textbf{Start Period} \\
-        \hline
-        \textbf{Redis} & \texttt{redis-cli -a \$\{REDIS\_PASSWORD\} ping} & 10s & 10s \\
-        \hline
-        \textbf{MongoDB} & \texttt{mongosh --eval "db.adminCommand('ping')"} & 15s & 20s \\
-        \hline
-        \textbf{Elasticsearch} & \texttt{curl \_cluster/health} (status: green/yellow) & 30s & 60s \\
-        \hline
-    \end{tabular}
-    \caption{Database Health Check Configurations}
-    \label{tab:health_checks}
-\end{table}
+| Service | Health Check Command | Interval | Start Period |
+|---------|---------------------|----------|-------------|
+| \textbf{Redis} | \texttt{redis-cli -a \${REDIS\_PASSWORD} ping} | 10s | 10s |
+| \textbf{MongoDB} | \texttt{mongosh --eval "db.adminCommand('ping')"} | 15s | 20s |
+| \textbf{Elasticsearch} | \texttt{curl \_cluster/health} (status: green/yellow) | 30s | 60s |
 
 The Next.js and FastAPI application containers are instructed by Docker Compose to halt their startup procedures until these specific health conditions evaluate to true, guaranteeing a robust boot process. Notably, the Redis health check includes the authentication password flag (\texttt{-a}), verifying not just TCP connectivity but the full authentication layer. MongoDB's generous 20-second start period accommodates disk initialization latency, while Elasticsearch's 60-second start period allows time for JVM warmup and shard allocation.
+
+However, two exceptions are intentionally designed in this sequencing:
+\begin{enumerate}
+\item \textbf{Celery Worker}: The \texttt{celery-worker} service utilizes a basic \texttt{depends\_on} array containing \texttt{[redis, qdrant]} without health conditions. This allows the worker to launch concurrently with database start, as Celery natively handles connection retries for its message broker and lazily initializes its connection to the Qdrant client only when a CV processing task is dequeued.
+\item \textbf{Chatbot API MongoDB Connection}: The \texttt{chatbot-api} service connects to MongoDB at runtime for session history logs, but it does not declare a \texttt{depends\_on} health condition for the \texttt{mongodb} service. Because MongoDB is fast-booting and the Chatbot API establishes session history connections lazily, omitting this dependency speeds up synchronous API container boot times without compromising reliability.
+\end{enumerate}
 
 \section{Internal Docker DNS Service Discovery}
 To eliminate the fragility of hardcoded IP addresses, the architecture leverages Docker's internal DNS resolver. All containers reside within a default bridge network. Consequently, services map to each other using their logical container names:
 \begin{itemize}
-    \item The Next.js API connects to the Redis session store natively via \texttt{redis://:\$\{REDIS\_PASSWORD\}@redis:6379}.
-    \item The internal Elasticsearch sync scripts connect to the cluster via \texttt{http://elasticsearch:9200}.
-    \item The Chatbot API connects to MongoDB via \texttt{mongodb://\$\{MONGO\_USER\}:\$\{MONGO\_PASS\}@mongodb:27017/chatbot?authSource=admin}.
+\item The Next.js API connects to the Redis session store natively via \texttt{redis://:\${REDIS\_PASSWORD}@redis:6379}.
+\item The internal Elasticsearch sync scripts connect to the cluster via \texttt{http://elasticsearch:9200}.
+\item The Chatbot API connects to MongoDB via \texttt{mongodb://\${MONGO\_USER}:\${MONGO\_PASS}@mongodb:27017/chatbot?authSource=admin}.
 \end{itemize}
 
 \section{Environment Variable Strategy}
 The application employs a dual-file environment strategy to separate concerns:
 \begin{itemize}
-    \item \textbf{\texttt{.env.local}}: Contains application-specific secrets (Supabase keys, API tokens) used by the Next.js application both during local development and within the Docker container.
-    \item \textbf{\texttt{.env.docker}}: Contains Docker-specific infrastructure credentials (Redis password, MongoDB root credentials) referenced by \texttt{docker-compose.yml} for service configuration.
+\item \textbf{\texttt{.env.local}}: Contains application-specific secrets (Supabase keys, API tokens) used by the Next.js application both during local development and within the Docker container.
+\item \textbf{\texttt{.env.docker}}: Contains Docker-specific infrastructure credentials (Redis password, MongoDB root credentials) referenced by \texttt{docker-compose.yml} for service configuration.
 \end{itemize}
 
 This separation ensures that infrastructure credentials are not leaked into the application runtime, and application secrets are not exposed to database containers.
@@ -80,29 +150,14 @@ The Elasticsearch container is explicitly configured for local development and i
 
 The platform employs Docker Compose for container orchestration rather than Kubernetes (K8s). While Kubernetes offers superior features for production-grade deployments—including automatic horizontal pod autoscaling, self-healing via liveness/readiness probes, rolling updates with zero-downtime deployments, and declarative service mesh routing—its operational complexity introduces significant overhead for a development-phase project of this scale.
 
-\begin{table}[H]
-    \centering
-    \begin{tabular}{|p{0.25\textwidth}|p{0.35\textwidth}|p{0.35\textwidth}|}
-        \hline
-        \textbf{Criteria} & \textbf{Docker Compose} & \textbf{Kubernetes} \\
-        \hline
-        \textbf{Configuration complexity} & Single YAML file (145 lines) & Multiple resource manifests (Deployment, Service, ConfigMap, Ingress) \\
-        \hline
-        \textbf{Learning curve} & Minimal — \texttt{docker compose up -d} & Requires \texttt{kubectl}, Helm charts, namespace management \\
-        \hline
-        \textbf{Startup time} & Seconds & Minutes (cluster bootstrapping, pod scheduling) \\
-        \hline
-        \textbf{Health checks} & Native \texttt{healthcheck} directive & Liveness/Readiness probes with finer granularity \\
-        \hline
-        \textbf{Scaling} & Manual (\texttt{docker compose scale}) & Automatic HPA based on CPU/memory metrics \\
-        \hline
-        \textbf{Service discovery} & Container name DNS (built-in) & CoreDNS with Service objects \\
-        \hline
-        \textbf{Resource overhead} & \textasciitilde 100 MB for Docker Engine & \textasciitilde 2 GB for control plane (etcd, API server, scheduler) \\
-        \hline
-    \end{tabular}
-    \caption{Docker Compose vs Kubernetes Comparison}
-    \label{tab:docker_vs_k8s}
-\end{table}
+| Criteria | Docker Compose | Kubernetes |
+|----------|---------------|------------|
+| \textbf{Configuration complexity} | Single YAML file (145 lines) | Multiple resource manifests (Deployment, Service, ConfigMap, Ingress) |
+| \textbf{Learning curve} | Minimal — \texttt{docker compose up -d} | Requires \texttt{kubectl}, Helm charts, namespace management |
+| \textbf{Startup time} | Seconds | Minutes (cluster bootstrapping, pod scheduling) |
+| \textbf{Health checks} | Native \texttt{healthcheck} directive | Liveness/Readiness probes with finer granularity |
+| \textbf{Scaling} | Manual (\texttt{docker compose scale}) | Automatic HPA based on CPU/memory metrics |
+| \textbf{Service discovery} | Container name DNS (built-in) | CoreDNS with Service objects |
+| \textbf{Resource overhead} | ~100 MB for Docker Engine | ~2 GB for control plane (etcd, API server, scheduler) |
 
 Docker Compose provides the ideal balance of simplicity and functionality for a seven-container development topology, while the architecture is designed to be Kubernetes-compatible for future production migration.

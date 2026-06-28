@@ -98,8 +98,8 @@ The initial phase addresses common structural anomalies inherent in scraped text
 ### 2.5.2 Phase 2: Semantic Normalization and Feature Extraction
 The core of the data enrichment process leverages rule-based heuristics.
 - **Job Title Standardization**: Regular expressions are applied to isolate the core professional title by removing promotional prefixes (e.g., "Tuyển gấp," "Cần tuyển") and descriptive suffixes detailing salary or urgency.
-- **Categorization**: The pipeline maps diverse job listings into **66 predefined industry domains** (defined in the `CORE_DOMAINS` dictionary, spanning from "An toàn lao động" to "Sinh viên / Thực tập sinh"). It utilizes a rule-based heuristic system which traverses the job title and description against a comprehensive keyword map of **95+ keyword-to-domain mappings**.
-- **Skill Extraction**: The system parses unstructured job descriptions to identify and extract up to ten specific professional skills. This is achieved using a rule-based dictionary of **60+ professional skills** spanning office tools, programming languages, soft skills, and industry-specific competencies.
+- **Categorization**: The pipeline maps diverse job listings into **66 predefined industry domains** (defined in the `CORE_DOMAINS` dictionary, spanning from "An toàn lao động" to "Sinh viên / Thực tập sinh"). It utilizes a rule-based heuristic system which traverses the job title and description against a comprehensive keyword map of **99 keyword-to-domain mappings**.
+- **Skill Extraction**: The system parses unstructured job descriptions to identify and extract up to ten specific professional skills. This is achieved using a rule-based dictionary of **64 professional skills** spanning office tools, programming languages, soft skills, and industry-specific competencies.
 
 ### 2.5.3 Phase 3: Deterministic Content Hashing
 To facilitate absolute deduplication beyond simple URL collisions, the pipeline generates a deterministic hash identifier for each job. This hash is computed based on the normalized company name, the cleaned job title, and the standardized location, ensuring that identical postings from different source URLs are accurately identified and consolidated.
@@ -117,8 +117,8 @@ flowchart LR
     
     subgraph "Phase 2 Detail"
         P2A["Title Regex Cleanup<br/>(Strip prefixes/suffixes)"]
-        P2B["Rule-based Mapping<br/>(95+ keywords → 66 Domains)"]
-        P2C["Rule-based Extraction<br/>(60+ Skill Dictionary)"]
+        P2B["Rule-based Mapping<br/>(99 keywords → 66 Domains)"]
+        P2C["Rule-based Extraction<br/>(64 Skill Dictionary)"]
     end
     
     P2 --> P2A
@@ -138,8 +138,8 @@ flowchart LR
 | TopCV scraper complexity | 323 lines |
 | JobOKO scraper complexity | 516 lines |
 | Industry domains (Phase 2) | 66 categories |
-| Keyword-to-domain mappings | 95+ entries |
-| Skill extraction dictionary | 60+ professional skills |
+| Keyword-to-domain mappings | 99 entries |
+| Skill extraction dictionary | 64 professional skills |
 | CI/CD pipeline timeout | 150 minutes |
 | Cron schedule | Every 3 days at 02:00 VN |
 | Concurrency limit (link checking) | 10 workers |

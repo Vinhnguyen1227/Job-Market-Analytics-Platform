@@ -27,30 +27,33 @@ This architectural choice allows protected routes, such as the `/profile` page, 
 ## 6.3 Faceted Search Architecture
 The job search interface, located at `/search`, provides users with an Elasticsearch-powered faceted search experience. Managing the complex state of numerous interdependent filters requires a robust state management strategy.
 
-### 6.3.1 URL-Driven State Management
-Instead of relying on isolated React state (`useState` or Redux), the search interface anchors its state entirely to the browser's URL query parameters via Next.js's `useSearchParams()`.
-When a user interacts with the custom `DropdownFilter` component (e.g., selecting "Ho Chi Minh City" and "Senior Level"), the client component immediately updates the URL. This mutation triggers a shallow route update, prompting a `useEffect` hook to serialize the parameters and invoke the `/api/v1/jobs/search` API endpoint.
+### 6.3.1 Hybrid State Management Strategy
+The search interface implements a hybrid state management model to balance initial deep-linking capability with high-speed, client-side responsiveness.
+
+1. **Initial Parameter Hydration**: On component mount, the search page utilizes Next.js's `useSearchParams()` hook to read initial search criteria (e.g. `keyword`, `location`, or `category`) directly from the browser's URL. This allows deep-linking to search pages (such as user redirection from landing page query boxes).
+2. **Local React State Control**: For subsequent filtering interactions, the state is managed locally via React's `useState` hook (`filters` state). When a user interacts with the custom `DropdownFilter` components to select locations, levels, or salary ranges, the component updates this React state rather than immediately pushing mutations to the browser's address bar history, avoiding history-stack pollution and route re-evaluations.
+3. **Reactive Fetching Loop**: A `useEffect` hook monitors the `filters` state. When updated, it compiles the selected facets into a query parameter string and dispatches an asynchronous `fetch` request to the backend search handler `/api/v1/jobs/search?locations=...`.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant FilterUI as DropdownFilter
-    participant NextRouter as Next.js Router
+    participant PageState as React State (useState)
     participant ClientHook as useEffect
     participant ES_API as /api/v1/jobs/search
     participant ES as Elasticsearch
     
     User->>FilterUI: Select "Hà Nội"
-    FilterUI->>NextRouter: Update URL params (?locations=Hà Nội)
-    NextRouter->>ClientHook: Trigger Dependency Array
-    ClientHook->>ES_API: GET /search?locations=Hà Nội
+    FilterUI->>PageState: Update filters state (filters.locations = ["Hà Nội"])
+    PageState->>ClientHook: Trigger fetchJobs callback
+    ClientHook->>ES_API: GET /api/v1/jobs/search?locations=Hà Nội
     ES_API->>ES: bool query (filter: cities=["Hà Nội"])
     ES-->>ES_API: Matching job documents
-    ES_API-->>ClientHook: Filtered Job JSON
-    ClientHook-->>FilterUI: Re-render Search Results
+    ES_API-->>PageState: Set job list state (setJobs)
+    PageState-->>FilterUI: Re-render Search Results (React Virtual DOM)
 ```
 
-This architecture ensures that complex search queries are entirely linkable, shareable, and resilient to page reloads, maintaining a stateless and predictable data flow.
+This hybrid approach allows the interface to maintain linkability upon entry while ensuring subsequent multi-criteria queries are completed instantly within the page scope without browser URL changes.
 
 ### 6.3.2 Supported Filter Parameters
 
@@ -66,10 +69,10 @@ This architecture ensures that complex search queries are entirely linkable, sha
 | `page` | ES `from` | Pagination offset | `?page=2` |
 
 ## 6.4 Client-Side Vietnamese NLP Processing
-While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
+While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. As detailed in Chapter 4, Section 4.4, these client-side parsers share the exact same heuristic and regex structures as the backend synchronization library helpers.ts to ensure consistency between the indexed facets and browser-evaluated filter state. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
 
 ### 6.4.1 Location and Geographic Parsing (`splitLocations`)
-Job postings on Vietnamese platforms frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a `splitLocations` parser utilizing a predefined dictionary of **63 valid geographic entities** (61 Vietnamese provinces/cities plus "Toàn quốc" and "Nước ngoài") and localized regex patterns.
+Job postings on Vietnamese portals frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a `splitLocations` parser utilizing a predefined dictionary of **65 valid geographic entities** (63 Vietnamese provinces/regions plus "Toàn quốc" and "Nước ngoài") and localized regex patterns.
 
 The parser performs the following operations:
 1. **Prefix stripping**: Removes common Vietnamese location prefixes ("Nơi làm việc:", "Khu vực:", "Tại:").
@@ -108,7 +111,7 @@ It converts all parsed numeric values into a standardized yearly metric (dividin
 |--------|-------|
 | Total page routes | 7 distinct pages |
 | API routes | 9 route handlers |
-| Geographic entities in dictionary | 63 (61 provinces + 2 meta-regions) |
+| Geographic entities in dictionary | 65 (63 provinces/regions + "Toàn quốc" + "Nước ngoài") |
 | Foreign currency codes filtered | 17 |
 | Salary buckets | 6 ranges |
 | Experience buckets | 4 ranges |

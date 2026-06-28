@@ -5,6 +5,50 @@ The foundation of the CareerIntel platform is a highly resilient, polyglot micro
 
 This chapter focuses on the four core platform services that underpin the data management and user-facing layers (Next.js, Elasticsearch, Redis, MongoDB). The remaining three services—`chatbot-api`, `celery-worker`, and `qdrant`—form the AI Chatbot subsystem and are documented in the companion thesis (Thesis 1).
 
+The following system-wide data flow diagram illustrates how each chapter in this thesis corresponds to distinct architectural stages and data movements across the platform:
+
+```mermaid
+flowchart TD
+    subgraph Ch2["Chapter 2: Data Acquisition"]
+        SCRAPE["Playwright Scrapers"]
+        NORM["Offline Normalization"]
+    end
+
+    subgraph Ch3["Chapter 3: Polyglot Persistence"]
+        SUPA[("Supabase (PostgreSQL)<br/>Source of Truth")]
+        REDIS[("Redis Cache<br/>Sessions & Security")]
+    end
+
+    subgraph Ch4["Chapter 4: Search Engine"]
+        ES[("Elasticsearch Index")]
+        SYNC["sync.ts Sync Pipeline"]
+    end
+
+    subgraph Ch5["Chapter 5: Auth & Security"]
+        AUTH["Supabase Auth / Server Actions"]
+        SEC["JWT Blacklist & Rate Limiting"]
+    end
+
+    subgraph Ch6["Chapter 6: Next.js Frontend"]
+        UI["App Router UI / Pages"]
+        STATE["URL-driven Search State"]
+    end
+
+    %% Flows
+    SCRAPE -->|"Upsert raw"| SUPA
+    NORM -->|"Upsert normalized"| SUPA
+    SUPA -->|"Batch pagination"| SYNC
+    SYNC -->|"Bulk push"| ES
+    
+    UI -->|"1. Auth request"| AUTH
+    AUTH -->|"2. Identity check"| SUPA
+    AUTH -.->|"3. Blacklist/Rate limit"| SEC
+    SEC -.->|"Read/Write"| REDIS
+    
+    UI -->|"4. Faceted Search"| STATE
+    STATE -->|"5. Search query"| ES
+```
+
 ## 1.2 Core Platform Topology
 The primary user-facing and data management layers of the application are supported by the following containerized services:
 - **`next-app`**: The Next.js 16 (App Router) frontend serving both Server-Side Rendered (SSR) web pages and API routes (`port 3000`). It acts as the primary gateway for users interacting with the job search interface and user profiles.
@@ -62,7 +106,7 @@ The `next-app` service is deployed using a highly optimized, multi-stage Dockerf
 ## 1.4 Database Health Probing & Startup Sequencing
 In a distributed microservices environment, strict boot sequencing is mandatory to prevent cascade failures when upstream dependencies are unresponsive. CareerIntel implements comprehensive database health probing directly within the `docker-compose.yml`.
 
-Services do not blindly depend on container startup; instead, they utilize the `depends_on` configuration coupled with `condition: service_healthy`.
+Most application services do not blindly depend on container startup; instead, they utilize the `depends_on` configuration coupled with `condition: service_healthy` to gate boot sequence.
 
 | Service | Health Check Command | Interval | Start Period |
 |---------|---------------------|----------|-------------|
@@ -71,6 +115,10 @@ Services do not blindly depend on container startup; instead, they utilize the `
 | **Elasticsearch** | `curl _cluster/health` (status: green/yellow) | 30s | 60s |
 
 The Next.js and FastAPI application containers are instructed by Docker Compose to halt their startup procedures until these specific health conditions evaluate to true, guaranteeing a robust boot process. Notably, the Redis health check includes the authentication password flag (`-a`), verifying not just TCP connectivity but the full authentication layer. MongoDB's generous 20-second start period accommodates disk initialization latency, while Elasticsearch's 60-second start period allows time for JVM warmup and shard allocation.
+
+However, two exceptions are intentionally designed in this sequencing:
+1. **Celery Worker**: The `celery-worker` service utilizes a basic `depends_on` array containing `[redis, qdrant]` without health conditions. This allows the worker to launch concurrently with database start, as Celery natively handles connection retries for its message broker and lazily initializes its connection to the Qdrant client only when a CV processing task is dequeued.
+2. **Chatbot API MongoDB Connection**: The `chatbot-api` service connects to MongoDB at runtime for session history logs, but it does not declare a `depends_on` health condition for the `mongodb` service. Because MongoDB is fast-booting and the Chatbot API establishes session history connections lazily, omitting this dependency speeds up synchronous API container boot times without compromising reliability.
 
 ## 1.5 Internal Docker DNS Service Discovery
 To eliminate the fragility of hardcoded IP addresses, the architecture leverages Docker's internal DNS resolver. All containers reside within a default bridge network. Consequently, services map to each other using their logical container names:
@@ -205,8 +253,8 @@ The initial phase addresses common structural anomalies inherent in scraped text
 ### 2.5.2 Phase 2: Semantic Normalization and Feature Extraction
 The core of the data enrichment process leverages rule-based heuristics.
 - **Job Title Standardization**: Regular expressions are applied to isolate the core professional title by removing promotional prefixes (e.g., "Tuyển gấp," "Cần tuyển") and descriptive suffixes detailing salary or urgency.
-- **Categorization**: The pipeline maps diverse job listings into **66 predefined industry domains** (defined in the `CORE_DOMAINS` dictionary, spanning from "An toàn lao động" to "Sinh viên / Thực tập sinh"). It utilizes a rule-based heuristic system which traverses the job title and description against a comprehensive keyword map of **95+ keyword-to-domain mappings**.
-- **Skill Extraction**: The system parses unstructured job descriptions to identify and extract up to ten specific professional skills. This is achieved using a rule-based dictionary of **60+ professional skills** spanning office tools, programming languages, soft skills, and industry-specific competencies.
+- **Categorization**: The pipeline maps diverse job listings into **66 predefined industry domains** (defined in the `CORE_DOMAINS` dictionary, spanning from "An toàn lao động" to "Sinh viên / Thực tập sinh"). It utilizes a rule-based heuristic system which traverses the job title and description against a comprehensive keyword map of **99 keyword-to-domain mappings**.
+- **Skill Extraction**: The system parses unstructured job descriptions to identify and extract up to ten specific professional skills. This is achieved using a rule-based dictionary of **64 professional skills** spanning office tools, programming languages, soft skills, and industry-specific competencies.
 
 ### 2.5.3 Phase 3: Deterministic Content Hashing
 To facilitate absolute deduplication beyond simple URL collisions, the pipeline generates a deterministic hash identifier for each job. This hash is computed based on the normalized company name, the cleaned job title, and the standardized location, ensuring that identical postings from different source URLs are accurately identified and consolidated.
@@ -224,8 +272,8 @@ flowchart LR
     
     subgraph "Phase 2 Detail"
         P2A["Title Regex Cleanup<br/>(Strip prefixes/suffixes)"]
-        P2B["Rule-based Mapping<br/>(95+ keywords → 66 Domains)"]
-        P2C["Rule-based Extraction<br/>(60+ Skill Dictionary)"]
+        P2B["Rule-based Mapping<br/>(99 keywords → 66 Domains)"]
+        P2C["Rule-based Extraction<br/>(64 Skill Dictionary)"]
     end
     
     P2 --> P2A
@@ -245,8 +293,8 @@ flowchart LR
 | TopCV scraper complexity | 323 lines |
 | JobOKO scraper complexity | 516 lines |
 | Industry domains (Phase 2) | 66 categories |
-| Keyword-to-domain mappings | 95+ entries |
-| Skill extraction dictionary | 60+ professional skills |
+| Keyword-to-domain mappings | 99 entries |
+| Skill extraction dictionary | 64 professional skills |
 | CI/CD pipeline timeout | 150 minutes |
 | Cron schedule | Every 3 days at 02:00 VN |
 | Concurrency limit (link checking) | 10 workers |
@@ -328,11 +376,18 @@ erDiagram
     }
     
     educations {
-        uuid id PK
+        string id PK
         uuid user_id FK
-        string institution
+        string school
         string degree
-        date graduation_date
+        string field_of_study
+        string start_month
+        string start_year
+        string end_month
+        string end_year
+        string activities
+        string description
+        timestamp created_at
     }
     
     skills {
@@ -424,7 +479,7 @@ Elasticsearch indices are carefully mapped to support diverse search requirement
 | `url` | `keyword` | — | Unique document ID |
 | `tieu_de` | `text` | `standard` | Job title full-text search (boosted ×3) |
 | `cong_ty` | `text` | `standard` | Company name search (boosted ×2) |
-| `cities` | `keyword` | — | Location faceted filter (63 provinces/cities) |
+| `cities` | `keyword` | — | Location faceted filter (65 geographic entities) |
 | `categories` | `keyword` | — | Industry domain faceted filter (66 domains) |
 | `workTypes` | `keyword` | — | Work type faceted filter |
 | `levels` | `keyword` | — | Seniority level faceted filter |
@@ -463,7 +518,7 @@ Elasticsearch was selected for its mature ecosystem, native Docker support, powe
 | ES index fields | 10 mapped fields + 1 stored-only (`raw_data`) |
 | ES sync batch size | 500 records per Supabase fetch |
 | ES JVM heap allocation | 512 MB initial / 512 MB maximum |
-| Geographic entities (cities) | 63 entries (61 provinces + "Toàn quốc" + "Nước ngoài") |
+| Geographic entities (cities) | 65 entries (63 provinces/regions + "Toàn quốc" + "Nước ngoài") |
 | Industry domain categories | 66 standardized categories |
 | Salary buckets | 6 ranges (0–3, 3–5, 5–10, 10–20, 20–50, 50+ triệu VND) |
 | Experience buckets | 4 ranges (< 1, 1–2, 2–5, 5+ years) |
@@ -487,7 +542,7 @@ To resolve these issues, the system architecture adopts the Command Query Respon
 To optimize Elasticsearch for both relevance scoring and exact filtering, the index structure (`jobs`) is meticulously designed within the data synchronization configuration file.
 
 Two main data type strategies are used:
-1. **Keyword Mapping**: Applied to fields that require exact match filtering and aggregations, such as `url`, `cities` (63 geographic entities), `categories` (66 industry domains), `workTypes`, `levels`, `expBuckets` (4 tiers), and `salaryBuckets` (6 ranges). The `keyword` type allows Elasticsearch to build optimal data structures (inverted index on exact terms) for directly searching original text structures without tokenization.
+1. **Keyword Mapping**: Applied to fields that require exact match filtering and aggregations, such as `url`, `cities` (65 geographic entities), `categories` (66 industry domains), `workTypes`, `levels`, `expBuckets` (4 tiers), and `salaryBuckets` (6 ranges). The `keyword` type allows Elasticsearch to build optimal data structures (inverted index on exact terms) for directly searching original text structures without tokenization.
 2. **Text Mapping**: Applied to fields that require relevance scoring, such as `tieu_de` (job title) and `cong_ty` (company name), using the default `standard` analyzer. The standard analyzer performs Unicode-aware tokenization, lowercasing, and stop word removal, enabling BM25-based relevance ranking.
 
 **Optimizing the "Document Store" with `enabled: false`**:
@@ -520,9 +575,9 @@ flowchart TD
 
 ## 4.4 Vietnamese NLP & Heuristic Normalization Logic
 
-Due to the unstructured nature of Vietnamese job postings, an internal library (`helpers.ts`, 152 lines) was built to extract and normalize data through Heuristic and Regex techniques prior to indexing:
+Due to the unstructured nature of Vietnamese job postings, an internal library (`helpers.ts`, 152 lines) was built to extract and normalize data through Heuristic and Regex techniques prior to indexing. These exact same parsing heuristics are shared with the client-side frontend routing layer (as detailed in Chapter 6, Section 6.4) to ensure that browser-evaluated filter state matches the backend index representations precisely:
 
-- **Location Parsing (`splitLocations`)**: Raw location strings (e.g., "Nơi làm việc: Hà Nội, Tp. HCM") are stripped of unnecessary prefixes, split by commas, and matched against a static array of **63 provinces/cities** (`CITY_PATTERNS`). The system applies Regex for noise filtering when job title keywords (such as "chuyên viên", "trưởng phòng") are mistakenly identified as locations. Notably, the parser implements a **negative lookbehind regex** `(?<!Bà Rịa) - (?!Vũng Tàu)` to prevent incorrectly splitting the compound province name "Bà Rịa - Vũng Tàu" on the hyphen delimiter — a critical edge case in Vietnamese geographic parsing.
+- **Location Parsing (`splitLocations`)**: Raw location strings (e.g., "Nơi làm việc: Hà Nội, Tp. HCM") are stripped of unnecessary prefixes, split by commas, and matched against a static array of **65 geographic entities** (`CITY_PATTERNS`). The system applies Regex for noise filtering when job title keywords (such as "chuyên viên", "trưởng phòng") are mistakenly identified as locations. Notably, the parser implements a **negative lookbehind regex** `(?<!Bà Rịa) - (?!Vũng Tàu)` to prevent incorrectly splitting the compound province name "Bà Rịa - Vũng Tàu" on the hyphen delimiter — a critical edge case in Vietnamese geographic parsing. Additionally, the `CITY_PATTERNS` array explicitly includes both "Vũng Tàu" and "Bà Rịa - Vũng Tàu" to ensure maximum flexibility: search queries containing only "Vũng Tàu" resolve correctly to the city's listings, while provincial queries map to "Bà Rịa - Vũng Tàu".
 
 - **Salary Bucketing (`getSalaryBuckets`)**: Foreign currency salaries are filtered out using a comprehensive regex matching **17 international currency codes** (USD, EUR, GBP, JPY, SGD, AUD, CAD, HKD, KRW, THB, MYR, INR, CNY, RMB, TWD, CZK, CHF). For VND salaries, the system uses Regex to extract number ranges (e.g., "10 - 15 triệu"), removes commas, converts them to floating-point decimals representing millions of VND, and classifies them into 6 fixed income ranges: 0–3, 3–5, 5–10, 10–20, 20–50, and over 50 million VND.
 
@@ -576,7 +631,7 @@ flowchart TD
 To build a UI filtering experience or to provide a valid set of parameters for the AI Chatbot's Tool Calling process, the system needs to know the available filter values (e.g., which cities currently have job postings).
 
 - **Elasticsearch Aggregations**: The client sends queries with a size of 0 (`size: 0`) requesting `terms aggregations` to group distinct attributes (`distinct_cities` up to 1,000 buckets, `distinct_categories` up to 500 buckets).
-- **EnumCache Pattern**: To avoid constantly sending Aggregation queries that consume Elasticsearch resources, the `EnumCache` class (`enum_cache.py`, 138 lines) maintains these lists directly in the server's memory (RAM) with a Time-To-Live (TTL) of 3,600 seconds (1 hour).
+- **EnumCache Pattern**: To avoid constantly sending Aggregation queries that consume Elasticsearch resources, the `EnumCache` class (`enum_cache.py`, 115 lines) maintains these lists directly in the server's memory (RAM) with a Time-To-Live (TTL) of 3,600 seconds (1 hour).
 - **Async Background Refresh**: The cache refresh process runs as a background task via `asyncio.Task` (`_refresh_loop`). Therefore, any GET request from the frontend or Pydantic Validator from the Chatbot can retrieve these data tags in sub-millisecond times thanks to synchronous properties (`@property`), significantly improving the application's overall response speed.
 
 ## 4.7 Key Quantitative Metrics
@@ -586,7 +641,7 @@ To build a UI filtering experience or to provide a valid set of parameters for t
 | ES Docker image version | `elasticsearch:8.13.0` |
 | JVM heap allocation | 512 MB initial / 512 MB maximum |
 | Sync batch size | 500 records per Supabase fetch |
-| City patterns dictionary | 63 geographic entities |
+| City patterns dictionary | 65 geographic entities |
 | Industry domain categories | 66 standardized tags |
 | Salary buckets | 6 ranges (VND millions) |
 | Experience buckets | 4 ranges |
@@ -598,7 +653,7 @@ To build a UI filtering experience or to provide a valid set of parameters for t
 | Max aggregation buckets (cities) | 1,000 |
 | Max aggregation buckets (categories) | 500 |
 | helpers.ts complexity | 152 lines |
-| enum_cache.py complexity | 138 lines |
+| enum_cache.py complexity | 115 lines |
 
 
 # Chapter 5: Authentication & Authorization
@@ -738,7 +793,7 @@ All input data is strictly validated using the **Zod** library (`LoginSchema`, `
 | Profile CRUD tables | 5 (`profiles`, `experiences`, `educations`, `skills`, `user_cvs`) |
 | redisSecurity.ts complexity | 126 lines |
 | middleware.ts complexity | 59 lines |
-| actions.ts complexity | 297 lines (8 Server Actions) |
+| actions.ts complexity | 297 lines (12 Server Actions) |
 
 
 # Chapter 6: Core Frontend Layer (Next.js)
@@ -770,30 +825,33 @@ This architectural choice allows protected routes, such as the `/profile` page, 
 ## 6.3 Faceted Search Architecture
 The job search interface, located at `/search`, provides users with an Elasticsearch-powered faceted search experience. Managing the complex state of numerous interdependent filters requires a robust state management strategy.
 
-### 6.3.1 URL-Driven State Management
-Instead of relying on isolated React state (`useState` or Redux), the search interface anchors its state entirely to the browser's URL query parameters via Next.js's `useSearchParams()`.
-When a user interacts with the custom `DropdownFilter` component (e.g., selecting "Ho Chi Minh City" and "Senior Level"), the client component immediately updates the URL. This mutation triggers a shallow route update, prompting a `useEffect` hook to serialize the parameters and invoke the `/api/v1/jobs/search` API endpoint.
+### 6.3.1 Hybrid State Management Strategy
+The search interface implements a hybrid state management model to balance initial deep-linking capability with high-speed, client-side responsiveness.
+
+1. **Initial Parameter Hydration**: On component mount, the search page utilizes Next.js's `useSearchParams()` hook to read initial search criteria (e.g. `keyword`, `location`, or `category`) directly from the browser's URL. This allows deep-linking to search pages (such as user redirection from landing page query boxes).
+2. **Local React State Control**: For subsequent filtering interactions, the state is managed locally via React's `useState` hook (`filters` state). When a user interacts with the custom `DropdownFilter` components to select locations, levels, or salary ranges, the component updates this React state rather than immediately pushing mutations to the browser's address bar history, avoiding history-stack pollution and route re-evaluations.
+3. **Reactive Fetching Loop**: A `useEffect` hook monitors the `filters` state. When updated, it compiles the selected facets into a query parameter string and dispatches an asynchronous `fetch` request to the backend search handler `/api/v1/jobs/search?locations=...`.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant FilterUI as DropdownFilter
-    participant NextRouter as Next.js Router
+    participant PageState as React State (useState)
     participant ClientHook as useEffect
     participant ES_API as /api/v1/jobs/search
     participant ES as Elasticsearch
     
     User->>FilterUI: Select "Hà Nội"
-    FilterUI->>NextRouter: Update URL params (?locations=Hà Nội)
-    NextRouter->>ClientHook: Trigger Dependency Array
-    ClientHook->>ES_API: GET /search?locations=Hà Nội
+    FilterUI->>PageState: Update filters state (filters.locations = ["Hà Nội"])
+    PageState->>ClientHook: Trigger fetchJobs callback
+    ClientHook->>ES_API: GET /api/v1/jobs/search?locations=Hà Nội
     ES_API->>ES: bool query (filter: cities=["Hà Nội"])
     ES-->>ES_API: Matching job documents
-    ES_API-->>ClientHook: Filtered Job JSON
-    ClientHook-->>FilterUI: Re-render Search Results
+    ES_API-->>PageState: Set job list state (setJobs)
+    PageState-->>FilterUI: Re-render Search Results (React Virtual DOM)
 ```
 
-This architecture ensures that complex search queries are entirely linkable, shareable, and resilient to page reloads, maintaining a stateless and predictable data flow.
+This hybrid approach allows the interface to maintain linkability upon entry while ensuring subsequent multi-criteria queries are completed instantly within the page scope without browser URL changes.
 
 ### 6.3.2 Supported Filter Parameters
 
@@ -809,10 +867,10 @@ This architecture ensures that complex search queries are entirely linkable, sha
 | `page` | ES `from` | Pagination offset | `?page=2` |
 
 ## 6.4 Client-Side Vietnamese NLP Processing
-While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
+While the core Machine Learning normalization pipeline processes job data asynchronously on the backend, the frontend implements lightweight, deterministic Natural Language Processing (NLP) tailored for the Vietnamese language. As detailed in Chapter 4, Section 4.4, these client-side parsers share the exact same heuristic and regex structures as the backend synchronization library helpers.ts to ensure consistency between the indexed facets and browser-evaluated filter state. This offloading strategy reduces API overhead and allows for instantaneous client-side formatting and data binning.
 
 ### 6.4.1 Location and Geographic Parsing (`splitLocations`)
-Job postings on Vietnamese platforms frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a `splitLocations` parser utilizing a predefined dictionary of **63 valid geographic entities** (61 Vietnamese provinces/cities plus "Toàn quốc" and "Nước ngoài") and localized regex patterns.
+Job postings on Vietnamese portals frequently concatenate multiple geographic regions into unstructured strings (e.g., "Khu vực: Hồ Chí Minh, Hà Nội - Đà Nẵng"). The frontend implements a `splitLocations` parser utilizing a predefined dictionary of **65 valid geographic entities** (63 Vietnamese provinces/regions plus "Toàn quốc" and "Nước ngoài") and localized regex patterns.
 
 The parser performs the following operations:
 1. **Prefix stripping**: Removes common Vietnamese location prefixes ("Nơi làm việc:", "Khu vực:", "Tại:").
@@ -851,7 +909,7 @@ It converts all parsed numeric values into a standardized yearly metric (dividin
 |--------|-------|
 | Total page routes | 7 distinct pages |
 | API routes | 9 route handlers |
-| Geographic entities in dictionary | 63 (61 provinces + 2 meta-regions) |
+| Geographic entities in dictionary | 65 (63 provinces/regions + "Toàn quốc" + "Nước ngoài") |
 | Foreign currency codes filtered | 17 |
 | Salary buckets | 6 ranges |
 | Experience buckets | 4 ranges |
