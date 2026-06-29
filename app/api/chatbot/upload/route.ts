@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json(
-        { success: false, error: 'No file provided', message: '❌ Vui lòng chọn file để tải lên.' },
+        { success: false, error: 'No file provided', message: 'Vui lòng chọn file để tải lên.' },
         { status: 400 }
       );
     }
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Invalid file type',
-          message: '❌ Chỉ hỗ trợ file PDF, DOCX, hoặc ảnh (PNG/JPG).',
+          message: 'Chỉ hỗ trợ file PDF, DOCX, hoặc ảnh (PNG/JPG).',
         },
         { status: 400 }
       );
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: errorText,
-          message: '❌ Lỗi xử lý file. Vui lòng thử lại.',
+          message: 'Lỗi xử lý file. Vui lòng thử lại.',
         },
         { status: 200 }
       );
@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
         success: false,
         error: String(error),
         message: isConnectionError
-          ? '⚠️ **Chatbot backend chưa khởi động.** Vui lòng chạy `uvicorn server:app --port 8000`.'
-          : '❌ Đã xảy ra lỗi khi tải file. Vui lòng thử lại.',
+          ? '**Chatbot backend chưa khởi động.** Vui lòng chạy `uvicorn server:app --port 8000`.'
+          : 'Đã xảy ra lỗi khi tải file. Vui lòng thử lại.',
       },
       { status: 200 }
     );

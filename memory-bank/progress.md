@@ -24,8 +24,8 @@
 * [x] Move ACKNOWLEDGEMENTS and LIST OF ABBREVIATIONS before Table of Contents, remove redundant title repetition from figure captions, and add colons format in Thesis 1.
 * [x] Change hyperlink fonts in LaTeX references to Times New Roman by setting urlstyle to same in Thesis 1.
 * [x] Remove unused abbreviations (CI/CD, GHA, USTH) from List of Abbreviations in Thesis 1.
-
-
+* [ ] Add interactive slash command suggestion chips in the chatbot frontend page.
+* [x] Remove all emojis from chatbot frontend and backend files.
 
 
 ## Bug Log

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       console.error(`Backend error: ${response.status} ${errorText}`);
       return NextResponse.json(
         {
-          response: '❌ Xin lỗi, đã xảy ra lỗi khi xử lý tin nhắn. Vui lòng thử lại.',
+          response: 'Xin lỗi, đã xảy ra lỗi khi xử lý tin nhắn. Vui lòng thử lại.',
           task_type: 'error',
           session_id: body.session_id || '',
           metadata: { error: errorText },
@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
       error instanceof TypeError && (error as any).cause?.code === 'ECONNREFUSED';
 
     const errorMessage = isConnectionError
-      ? '⚠️ **Chatbot backend chưa khởi động.**\n\nVui lòng chạy:\n```\ncd backend/chatbot\nuvicorn server:app --port 8000\n```'
-      : '❌ Đã xảy ra lỗi kết nối. Vui lòng thử lại.';
+      ? '**Chatbot backend chưa khởi động.**\n\nVui lòng chạy:\n```\ncd backend/chatbot\nuvicorn server:app --port 8000\n```'
+      : 'Đã xảy ra lỗi kết nối. Vui lòng thử lại.';
 
     return NextResponse.json(
       {

@@ -50,6 +50,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
   const [resumeName, setResumeName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeChat = chats.find(c => c.id === activeChatId);
 
@@ -148,7 +149,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     const placeholderMsg: Message = {
       id: Date.now().toString(),
       role: 'system',
-      content: '⏳ Đang xử lý yêu cầu...',
+      content: 'Đang xử lý yêu cầu...',
     };
     
     setMessages([...baseMessages, placeholderMsg]);
@@ -160,7 +161,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           const newMsgs = [...prev];
           const lastMsg = newMsgs[newMsgs.length - 1];
           if (lastMsg && lastMsg.role === 'system') {
-            lastMsg.content = '⏳ Đang trích xuất CV — bước này có thể mất tới 3 phút...';
+            lastMsg.content = 'Đang trích xuất CV — bước này có thể mất tới 3 phút...';
           }
           return newMsgs;
         });
@@ -169,7 +170,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
             const newMsgs = [...c.messages];
             const lastMsg = newMsgs[newMsgs.length - 1];
             if (lastMsg && lastMsg.role === 'system') {
-              lastMsg.content = '⏳ Đang trích xuất CV — bước này có thể mất tới 3 phút...';
+              lastMsg.content = 'Đang trích xuất CV — bước này có thể mất tới 3 phút...';
             }
             return { ...c, messages: newMsgs };
           }
@@ -203,7 +204,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           const finalMsg: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: result.response || result.message || '✅ Hoàn tất',
+            content: result.response || result.message || 'Hoàn tất',
             taskType: result.task_type || (result.resume_id ? 'upload' : undefined),
             metadata: result.metadata,
           };
@@ -231,7 +232,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
           const errorMsg: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `❌ Lỗi: ${statusData.error || 'Xử lý thất bại.'}`,
+            content: `Lỗi: ${statusData.error || 'Xử lý thất bại.'}`,
           };
           const cleanBase = baseMessages.filter(m => m.role !== 'system');
           setMessages([...cleanBase, errorMsg]);
@@ -247,7 +248,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     const timeoutMsg: Message = {
       id: (Date.now() + 1).toString(),
       role: 'assistant',
-      content: '❌ Hết thời gian chờ xử lý từ server. Vui lòng thử lại.',
+      content: 'Hết thời gian chờ xử lý từ server. Vui lòng thử lại.',
     };
     const cleanBase = baseMessages.filter(m => m.role !== 'system');
     setMessages([...cleanBase, timeoutMsg]);
@@ -368,7 +369,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: '❌ Không thể kết nối đến server. Vui lòng kiểm tra lại kết nối.',
+        content: 'Không thể kết nối đến server. Vui lòng kiểm tra lại kết nối.',
       };
 
       const updatedMessages = [...newMessages, errorMsg];
@@ -394,7 +395,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     const uploadMsg: Message = {
       id: Date.now().toString(),
       role: 'system',
-      content: `📥 Đang tải lên và xử lý **${file.name}**...`,
+      content: `Đang tải lên và xử lý **${file.name}**...`,
     };
 
     let currentChatId = activeChatId;
@@ -410,7 +411,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
             currentChatId = createData.conversation.id;
             const newChat: Chat = {
               id: currentChatId!,
-              title: `📄 ${file.name}`,
+              title: `${file.name}`,
               messages: [],
             };
             setChats(prev => [newChat, ...prev]);
@@ -424,7 +425,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         currentChatId = tempId;
         const newChat: Chat = {
           id: tempId,
-          title: `📄 ${file.name}`,
+          title: `${file.name}`,
           messages: [],
         };
         setChats(prev => [newChat, ...prev]);
@@ -476,7 +477,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         const successMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.message || `✅ Đã xử lý thành công **${file.name}**`,
+          content: data.message || `Đã xử lý thành công **${file.name}**`,
           taskType: 'upload',
         };
 
@@ -503,7 +504,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
         const errorMsg: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.message || `❌ Lỗi xử lý file: ${data.error}`,
+          content: data.message || `Lỗi xử lý file: ${data.error}`,
         };
 
         const updatedMessages = [...newMessages, errorMsg];
@@ -517,7 +518,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: '❌ Không thể kết nối đến server để tải file. Vui lòng thử lại.',
+        content: 'Không thể kết nối đến server để tải file. Vui lòng thử lại.',
       };
 
       const updatedMessages = [...newMessages, errorMsg];
@@ -543,6 +544,20 @@ export default function AIAssistantPage({ user }: { user?: any }) {
     'Kỹ năng hot nhất hiện nay?',
     'Tư vấn CV cho fresher?',
   ];
+
+  const commandChips = [
+    { label: '/search [role/city]', prefix: '/search ', icon: Search, description: 'Search jobs' },
+    { label: '/interview [role]', prefix: '/interview ', icon: Sparkles, description: 'Interview prep' },
+    { label: '/review', prefix: '/review', icon: FileText, description: 'CV review' },
+    { label: '/match', prefix: '/match ', icon: BarChart2, description: 'Job match' },
+  ];
+
+  const handleChipClick = (prefix: string) => {
+    setInputValue(prefix);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-[#f4f2ee]">
@@ -640,6 +655,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
               {/* Input at center */}
               <div className="w-full max-w-2xl">
+                <CommandChips chips={commandChips} onChipClick={handleChipClick} />
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
@@ -648,6 +664,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
                   onFileClick={() => fileInputRef.current?.click()}
                   isLoading={isTyping}
                   isUploading={isUploading}
+                  textareaRef={textareaRef}
                 />
               </div>
             </div>
@@ -703,6 +720,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
               {/* Input at bottom */}
               <div className="px-6 pb-6 max-w-3xl mx-auto w-full">
+                <CommandChips chips={commandChips} onChipClick={handleChipClick} />
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
@@ -711,6 +729,7 @@ export default function AIAssistantPage({ user }: { user?: any }) {
                   onFileClick={() => fileInputRef.current?.click()}
                   isLoading={isTyping}
                   isUploading={isUploading}
+                  textareaRef={textareaRef}
                 />
               </div>
             </>
@@ -737,6 +756,33 @@ export default function AIAssistantPage({ user }: { user?: any }) {
 
 // --- ChatInput Component ------------------------------------------------
 
+function CommandChips({
+  chips,
+  onChipClick,
+}: {
+  chips: { label: string; prefix: string; icon: React.ElementType; description: string }[];
+  onChipClick: (prefix: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 mb-3">
+      {chips.map((chip) => {
+        const Icon = chip.icon;
+        return (
+          <button
+            key={chip.prefix}
+            onClick={() => onChipClick(chip.prefix)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-gray-200 text-slate-600 shadow-sm hover:border-blue-300 hover:text-blue-700 hover:shadow-md active:scale-95 transition-all duration-150 cursor-pointer"
+            title={chip.description}
+          >
+            <Icon size={13} className="shrink-0" />
+            <span>{chip.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ChatInput({
   value,
   onChange,
@@ -745,6 +791,7 @@ function ChatInput({
   onFileClick,
   isLoading,
   isUploading,
+  textareaRef,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -753,13 +800,14 @@ function ChatInput({
   onFileClick: () => void;
   isLoading?: boolean;
   isUploading?: boolean;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   return (
     <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
       <button
         onClick={onFileClick}
         disabled={isUploading}
-        title="Tải lên CV (PDF/DOCX)"
+        title="Upload CV (PDF/DOCX)"
         className="text-gray-400 hover:text-blue-600 shrink-0 transition-colors disabled:opacity-50"
       >
         {isUploading ? (
@@ -769,11 +817,12 @@ function ChatInput({
         )}
       </button>
       <textarea
+        ref={textareaRef}
         rows={1}
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder={isUploading ? 'Đang xử lý file...' : 'Ask anything'}
+        placeholder={isUploading ? 'Processing file...' : 'Ask anything'}
         disabled={isUploading}
         className="flex-1 bg-transparent outline-none resize-none text-sm text-slate-800 placeholder-gray-400 leading-6 max-h-40 overflow-y-auto disabled:opacity-50"
       />

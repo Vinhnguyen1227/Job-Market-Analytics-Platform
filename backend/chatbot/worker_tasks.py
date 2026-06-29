@@ -66,7 +66,7 @@ def process_cv_task(self, file_path: str, filename: str, session_id: str, job_id
             result["session_id"] = session_id or ""
             result["task_type"] = "upload"
             result["response"] = (
-                f"✅ Đã trích xuất xong CV ({result.get('num_experience', 0)} kinh nghiệm, "
+                f"Đã trích xuất xong CV ({result.get('num_experience', 0)} kinh nghiệm, "
                 f"{result.get('num_skills', 0)} kỹ năng). Bạn muốn mình đánh giá ngay không?"
             )
             result["metadata"] = {

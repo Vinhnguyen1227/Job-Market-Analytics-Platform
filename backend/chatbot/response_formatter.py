@@ -52,9 +52,9 @@ def format_job_cards(hits: list[dict[str, Any]]) -> str:
         if link:
             head = f"### {i}. [{title}]({link})"
         lines.append(head)
-        lines.append(f"- 🏢 **Công ty:** {company}")
-        lines.append(f"- 📍 **Địa điểm:** {location}")
-        lines.append(f"- 💰 **Lương:** {salary}")
+        lines.append(f"- **Công ty:** {company}")
+        lines.append(f"- **Địa điểm:** {location}")
+        lines.append(f"- **Lương:** {salary}")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

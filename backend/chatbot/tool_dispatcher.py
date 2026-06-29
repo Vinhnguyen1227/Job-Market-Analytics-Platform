@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 NEEDS_RESUME_MD = (
-    "🧐 Mình cần xem CV của bạn trước khi đánh giá. "
-    "Bấm 📎 ở khung chat để tải CV (PDF/DOCX) lên nhé."
+    "Mình cần xem CV của bạn trước khi đánh giá. "
+    "Bấm tải lên ở khung chat để tải CV (PDF/DOCX) lên nhé."
 )
 
 
